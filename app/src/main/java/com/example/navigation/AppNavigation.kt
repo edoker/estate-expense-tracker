@@ -183,6 +183,9 @@ fun AppNavigation(
                         onCancelInvite = { inviteId ->
                             detailViewModel.cancelInvite(inviteId)
                         },
+                        onRemoveMember = { targetUid, name ->
+                            detailViewModel.removeMember(targetUid, name)
+                        },
                         onDeleteProject = {
                             detailViewModel.deleteProject {
                                 navController.popBackStack()

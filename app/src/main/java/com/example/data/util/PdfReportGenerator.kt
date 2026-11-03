@@ -28,7 +28,8 @@ object PdfReportGenerator {
         projectName: String,
         dateRangeLabel: String,
         transactions: List<Expense>,
-        members: Map<String, ProjectMember>
+        members: Map<String, ProjectMember>,
+        memberFilterLabel: String? = null
     ): File {
         val pdfDocument = PdfDocument()
 
@@ -39,9 +40,12 @@ object PdfReportGenerator {
         val totalGot = transactions.filter { it.isIncome }.sumOf { it.amount }
         val netBalance = totalGot - totalGave
 
-        val rowsPerPage = 22
+        val rowsFirstPage = 18
+        val rowsOtherPages = 26
         val totalTransactions = transactions.size
-        val totalPages = if (totalTransactions == 0) 1 else ((totalTransactions + rowsPerPage - 1) / rowsPerPage)
+        val totalPages = if (totalTransactions <= rowsFirstPage) 1 else {
+            1 + ((totalTransactions - rowsFirstPage + rowsOtherPages - 1) / rowsOtherPages)
+        }
 
         val dateFormat = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
         val generatedTimestamp = dateFormat.format(Date())
@@ -68,16 +72,21 @@ object PdfReportGenerator {
                 textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 canvas.drawText("PARTNER LEDGER REPORT", MARGIN + 16f, y + 28f, textPaint)
 
-                textPaint.textSize = 11f
+                textPaint.textSize = 10.5f
                 textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
                 textPaint.color = Color.rgb(210, 225, 245)
-                canvas.drawText("Project: $projectName   |   Period: $dateRangeLabel", MARGIN + 16f, y + 48f, textPaint)
+                val periodText = if (memberFilterLabel.isNullOrBlank()) {
+                    "Project: $projectName   |   Period: $dateRangeLabel"
+                } else {
+                    "Project: $projectName   |   Period: $dateRangeLabel   |   Member: $memberFilterLabel"
+                }
+                canvas.drawText(periodText, MARGIN + 16f, y + 48f, textPaint)
 
-                y += 76f
+                y += 74f
 
                 // Summary Cards
                 val cardWidth = (PAGE_WIDTH - (MARGIN * 2) - 16f) / 3f
-                val cardHeight = 56f
+                val cardHeight = 54f
 
                 // Card 1: Total Received (You Got)
                 drawSummaryCard(
@@ -108,7 +117,76 @@ object PdfReportGenerator {
                     accentColor = netColor
                 )
 
-                y += cardHeight + 18f
+                y += cardHeight + 12f
+
+                // -------------------------------------------------------------
+                // KPI: Total Spent by Each Member
+                // -------------------------------------------------------------
+                val allPayerUids = (transactions.filter { !it.isIncome }.map { it.paidByUid } + members.keys).distinct()
+                val spendingByMember = allPayerUids.mapNotNull { uid ->
+                    val spent = transactions.filter { !it.isIncome && it.paidByUid == uid }.sumOf { it.amount }
+                    val member = members[uid]
+                    val name = member?.name?.ifBlank { member.email.substringBefore("@") }
+                        ?: if (uid.isNotBlank()) "Partner (${uid.take(4)})" else "Partner"
+                    if (spent > 0.0 || (members.containsKey(uid) && allPayerUids.size <= 4)) {
+                        Triple(name, spent, if (totalGave > 0) (spent / totalGave * 100) else 0.0)
+                    } else null
+                }.sortedByDescending { it.second }
+
+                val memberKpiHeight = if (spendingByMember.size > 3) 58f else 46f
+                val memberCardRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + memberKpiHeight)
+
+                paint.color = Color.rgb(248, 250, 252)
+                paint.style = Paint.Style.FILL
+                canvas.drawRoundRect(memberCardRect, 6f, 6f, paint)
+
+                paint.color = Color.rgb(226, 232, 240)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 1f
+                canvas.drawRoundRect(memberCardRect, 6f, 6f, paint)
+
+                textPaint.color = Color.rgb(71, 85, 105)
+                textPaint.textSize = 8f
+                textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                canvas.drawText("TOTAL SPENT BY MEMBER (EXPENSE BREAKDOWN)", MARGIN + 12f, y + 14f, textPaint)
+
+                if (spendingByMember.isEmpty()) {
+                    textPaint.color = Color.rgb(148, 163, 184)
+                    textPaint.textSize = 9f
+                    textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+                    canvas.drawText("No member expense spending recorded in this period.", MARGIN + 12f, y + 32f, textPaint)
+                } else {
+                    val count = minOf(spendingByMember.size, 6)
+                    val colCount = if (count <= 3) count else 3
+                    val itemWidth = (PAGE_WIDTH - (MARGIN * 2) - 24f) / colCount
+
+                    for (idx in 0 until count) {
+                        val (memName, spentAmount, pct) = spendingByMember[idx]
+                        val rowIdx = idx / colCount
+                        val colIdx = idx % colCount
+                        val itemX = MARGIN + 12f + (colIdx * itemWidth)
+                        val itemY = y + 28f + (rowIdx * 20f)
+
+                        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        textPaint.textSize = 8.5f
+                        textPaint.color = Color.rgb(30, 41, 59)
+                        val truncatedName = if (memName.length > 15) memName.substring(0, 13) + ".." else memName
+                        canvas.drawText("$truncatedName:", itemX, itemY, textPaint)
+
+                        val nameWidth = textPaint.measureText("$truncatedName: ")
+                        textPaint.color = Color.rgb(211, 47, 47)
+                        textPaint.textSize = 9f
+                        canvas.drawText(formatIndianCurrency(spentAmount), itemX + nameWidth, itemY, textPaint)
+
+                        val amtWidth = textPaint.measureText(formatIndianCurrency(spentAmount))
+                        textPaint.color = Color.rgb(100, 116, 139)
+                        textPaint.textSize = 7.5f
+                        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                        canvas.drawText(" (${pct.toInt()}%)", itemX + nameWidth + amtWidth + 2f, itemY, textPaint)
+                    }
+                }
+
+                y += memberKpiHeight + 14f
             } else {
                 // Secondary Page Header
                 paint.color = Color.rgb(245, 247, 250)
@@ -117,7 +195,12 @@ object PdfReportGenerator {
                 textPaint.color = Color.rgb(55, 65, 81)
                 textPaint.textSize = 10f
                 textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                canvas.drawText("Project: $projectName (Continued)  |  $dateRangeLabel", MARGIN + 8f, y + 18f, textPaint)
+                val subHeader = if (memberFilterLabel.isNullOrBlank()) {
+                    "Project: $projectName (Continued)  |  $dateRangeLabel"
+                } else {
+                    "Project: $projectName (Continued)  |  $dateRangeLabel  |  Member: $memberFilterLabel"
+                }
+                canvas.drawText(subHeader, MARGIN + 8f, y + 18f, textPaint)
 
                 y += 36f
             }
@@ -143,7 +226,7 @@ object PdfReportGenerator {
             canvas.drawText("Type", colType, tableTop + 16f, textPaint)
             canvas.drawText("Party / Description", colParty, tableTop + 16f, textPaint)
             canvas.drawText("Mode", colMode, tableTop + 16f, textPaint)
-            canvas.drawText("Handled By", colHandled, tableTop + 16f, textPaint)
+            canvas.drawText("Paid By", colHandled, tableTop + 16f, textPaint)
 
             textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText("Amount", colAmount, tableTop + 16f, textPaint)
@@ -152,7 +235,8 @@ object PdfReportGenerator {
             y += 24f
 
             // Table Rows
-            val endIdx = minOf(txnIndex + rowsPerPage, totalTransactions)
+            val pageLimit = if (pageNumber == 1) rowsFirstPage else rowsOtherPages
+            val endIdx = minOf(txnIndex + pageLimit, totalTransactions)
             if (totalTransactions == 0) {
                 textPaint.color = Color.GRAY
                 textPaint.textSize = 11f

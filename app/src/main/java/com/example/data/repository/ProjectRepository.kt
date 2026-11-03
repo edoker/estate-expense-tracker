@@ -302,6 +302,34 @@ class ProjectRepository(
         }
     }
 
+    suspend fun removeMember(projectId: String, targetUid: String): Result<Unit> {
+        val uid = requireUserId()
+        if (targetUid == uid) {
+            return Result.failure(IllegalStateException("Admins cannot remove themselves."))
+        }
+        val projectRef = db.collection("projects").document(projectId)
+        return try {
+            val snapshot = projectRef.get().await()
+            val adminUid = snapshot.getString("adminUid")
+            if (adminUid != uid) {
+                return Result.failure(IllegalStateException("Only the project admin can remove members."))
+            }
+            if (targetUid == adminUid) {
+                return Result.failure(IllegalStateException("Cannot remove the project admin."))
+            }
+
+            projectRef.update(
+                "memberUids", FieldValue.arrayRemove(targetUid),
+                "members.$targetUid", FieldValue.delete()
+            ).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, projectRef.path)
+            Result.failure(e)
+        }
+    }
+
     suspend fun deleteProject(projectId: String): Result<Unit> {
         val uid = requireUserId()
         val projectRef = db.collection("projects").document(projectId)

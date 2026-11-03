@@ -115,6 +115,7 @@ fun ProjectDetailScreen(
     onRemoveAttachment: (expense: Expense, attachment: ExpenseAttachment) -> Unit,
     onInvitePartner: (String) -> Unit,
     onCancelInvite: (String) -> Unit,
+    onRemoveMember: (targetUid: String, memberName: String) -> Unit,
     onDeleteProject: () -> Unit,
     onClearOperationMessage: () -> Unit,
     onNavigateBack: () -> Unit
@@ -319,12 +320,14 @@ fun ProjectDetailScreen(
                     auditTrail = auditTrail
                 )
                 2 -> MembersTab(
+                    projectName = project.name,
                     currentUserId = currentUserId,
                     isAdmin = isAdmin,
                     members = project.members,
                     pendingInvites = pendingInvites,
                     onOpenInviteDialog = { showInviteDialog = true },
-                    onCancelInvite = onCancelInvite
+                    onCancelInvite = onCancelInvite,
+                    onRemoveMember = onRemoveMember
                 )
             }
         }
@@ -396,13 +399,17 @@ fun ProjectDetailScreen(
 
 @Composable
 private fun MembersTab(
+    projectName: String,
     currentUserId: String,
     isAdmin: Boolean,
     members: Map<String, ProjectMember>,
     pendingInvites: List<Invite>,
     onOpenInviteDialog: () -> Unit,
-    onCancelInvite: (String) -> Unit
+    onCancelInvite: (String) -> Unit,
+    onRemoveMember: (targetUid: String, memberName: String) -> Unit
 ) {
+    var memberToRemove by remember { mutableStateOf<Pair<String, ProjectMember>?>(null) }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -530,6 +537,24 @@ private fun MembersTab(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
+
+                    // Admin can remove non-admin members
+                    if (isAdmin && !isMemberAdmin && !isCurrent) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { memberToRemove = Pair(uid, member) },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("remove_member_button_${uid}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Remove Member",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -620,5 +645,48 @@ private fun MembersTab(
                 }
             }
         }
+    }
+
+    if (memberToRemove != null) {
+        val target = memberToRemove!!
+        val displayName = target.second.name.ifBlank { target.second.email }
+        AlertDialog(
+            onDismissRequest = { memberToRemove = null },
+            title = {
+                Text(
+                    text = "Remove Member?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove \"$displayName\" from \"$projectName\"? They will immediately lose access to this project.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val uid = target.first
+                        memberToRemove = null
+                        onRemoveMember(uid, displayName)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    modifier = Modifier.testTag("confirm_remove_member_button")
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { memberToRemove = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

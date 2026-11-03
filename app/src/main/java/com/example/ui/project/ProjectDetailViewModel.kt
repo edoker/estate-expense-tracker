@@ -262,6 +262,19 @@ class ProjectDetailViewModel(
         }
     }
 
+    fun removeMember(targetUid: String, memberName: String) {
+        _isProcessing.value = true
+        viewModelScope.launch {
+            val result = projectRepository.removeMember(projectId, targetUid)
+            _isProcessing.value = false
+            result.onSuccess {
+                _operationMessage.value = "$memberName removed from project"
+            }.onFailure { error ->
+                _operationMessage.value = error.localizedMessage ?: "Failed to remove member"
+            }
+        }
+    }
+
     fun clearOperationMessage() {
         _operationMessage.value = null
     }

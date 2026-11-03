@@ -15,17 +15,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -48,12 +58,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.Expense
 import com.example.data.model.ProjectMember
+import com.example.data.util.ExcelReportGenerator
 import com.example.data.util.PdfReportGenerator
 import com.example.data.util.formatDate
 import com.example.data.util.formatIndianCurrency
 import com.google.firebase.Timestamp
 import java.util.Calendar
 import java.util.Date
+
+enum class ExportFormat(val label: String, val extension: String) {
+    PDF("PDF Document", ".pdf"),
+    EXCEL("Excel Sheet (.xlsx)", ".xlsx")
+}
 
 enum class DateRangePreset(val label: String) {
     ALL_TIME("All Time"),
@@ -78,8 +94,11 @@ fun ExportReportDialog(
 ) {
     val context = LocalContext.current
 
+    var selectedFormat by remember { mutableStateOf(ExportFormat.PDF) }
     var selectedPreset by remember { mutableStateOf(DateRangePreset.THIS_MONTH) }
     var selectedTypeFilter by remember { mutableStateOf(TransactionTypeFilter.ALL) }
+    var selectedMemberUid by remember { mutableStateOf<String?>(null) }
+    var memberFilterMenuExpanded by remember { mutableStateOf(false) }
 
     // Calculate dates for This Month
     val now = Calendar.getInstance()
@@ -98,7 +117,7 @@ fun ExportReportDialog(
     var showEndDatePicker by remember { mutableStateOf(false) }
 
     // Filter transactions based on selection
-    val filteredTransactions = remember(transactions, selectedPreset, customStartDate, customEndDate, selectedTypeFilter) {
+    val filteredTransactions = remember(transactions, selectedPreset, customStartDate, customEndDate, selectedTypeFilter, selectedMemberUid) {
         val (startTime, endTime) = when (selectedPreset) {
             DateRangePreset.ALL_TIME -> 0L to Long.MAX_VALUE
             DateRangePreset.THIS_MONTH -> {
@@ -134,7 +153,8 @@ fun ExportReportDialog(
                 TransactionTypeFilter.YOU_GAVE -> !txn.isIncome
                 TransactionTypeFilter.YOU_GOT -> txn.isIncome
             }
-            dateMatches && typeMatches
+            val memberMatches = selectedMemberUid == null || txn.paidByUid == selectedMemberUid
+            dateMatches && typeMatches && memberMatches
         }
     }
 
@@ -159,14 +179,14 @@ fun ExportReportDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.PictureAsPdf,
+                    imageVector = if (selectedFormat == ExportFormat.PDF) Icons.Default.PictureAsPdf else Icons.Default.TableChart,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Export PDF Report",
+                    text = "Export Ledger Report",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -179,6 +199,36 @@ fun ExportReportDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Format Selection Section
+                Text(
+                    text = "Report Format",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ExportFormat.values().forEach { format ->
+                        FilterChip(
+                            selected = selectedFormat == format,
+                            onClick = { selectedFormat = format },
+                            label = { Text(format.label, style = MaterialTheme.typography.bodySmall) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (format == ExportFormat.PDF) Icons.Default.PictureAsPdf else Icons.Default.TableChart,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            modifier = Modifier.testTag("export_format_${format.name.lowercase()}")
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
                 // Date Range Section
                 Text(
                     text = "Date Period",
@@ -236,23 +286,129 @@ fun ExportReportDialog(
                     }
                 }
 
-                // Type Filter Section
+                // Type & Member Filter Section
                 Text(
-                    text = "Transaction Type",
+                    text = "Transaction & Member Filters",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TransactionTypeFilter.values().forEach { filter ->
+                    // Type Filters (All, You Gave, You Got)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TransactionTypeFilter.values().forEach { filter ->
+                            FilterChip(
+                                selected = selectedTypeFilter == filter,
+                                onClick = { selectedTypeFilter = filter },
+                                label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+
+                    // Member Filter Dropdown beside type filters
+                    Box {
+                        val selectedMemberName = selectedMemberUid?.let { uid ->
+                            members[uid]?.name?.ifBlank { members[uid]?.email } ?: "Partner"
+                        }
+                        val isMemberActive = selectedMemberUid != null
+
                         FilterChip(
-                            selected = selectedTypeFilter == filter,
-                            onClick = { selectedTypeFilter = filter },
-                            label = { Text(filter.label) }
+                            selected = isMemberActive,
+                            onClick = { memberFilterMenuExpanded = true },
+                            label = {
+                                Text(
+                                    text = if (isMemberActive) "Paid: $selectedMemberName" else "All Members",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (isMemberActive) {
+                                    IconButton(
+                                        onClick = {
+                                            selectedMemberUid = null
+                                            memberFilterMenuExpanded = false
+                                        },
+                                        modifier = Modifier.size(16.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            },
+                            modifier = Modifier.testTag("export_member_filter_chip")
                         )
+
+                        DropdownMenu(
+                            expanded = memberFilterMenuExpanded,
+                            onDismissRequest = { memberFilterMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "All Members",
+                                        fontWeight = if (selectedMemberUid == null) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    selectedMemberUid = null
+                                    memberFilterMenuExpanded = false
+                                }
+                            )
+
+                            HorizontalDivider()
+
+                            members.forEach { (uid, member) ->
+                                val name = member.name.ifBlank { member.email }
+                                val count = transactions.count { it.paidByUid == uid }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "$name ($count)",
+                                            fontWeight = if (selectedMemberUid == uid) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = if (selectedMemberUid == uid) Icons.Default.Check else Icons.Default.Person,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = if (selectedMemberUid == uid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedMemberUid = uid
+                                        memberFilterMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -270,8 +426,14 @@ fun ExportReportDialog(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        val previewLabel = if (selectedMemberUid != null) {
+                            val name = members[selectedMemberUid]?.name?.ifBlank { members[selectedMemberUid]?.email } ?: "Partner"
+                            "${filteredTransactions.size} transactions (Filtered by $name)"
+                        } else {
+                            "${filteredTransactions.size} transaction${if (filteredTransactions.size != 1) "s" else ""}"
+                        }
                         Text(
-                            text = "${filteredTransactions.size} transaction${if (filteredTransactions.size != 1) "s" else ""}",
+                            text = previewLabel,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -304,20 +466,37 @@ fun ExportReportDialog(
             }
         },
         confirmButton = {
+            val memberFilterLabel = selectedMemberUid?.let { uid ->
+                members[uid]?.name?.ifBlank { members[uid]?.email } ?: "Partner"
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = {
-                        val file = PdfReportGenerator.generateReport(
-                            context = context,
-                            projectName = projectName,
-                            dateRangeLabel = dateRangeLabel,
-                            transactions = filteredTransactions,
-                            members = members
-                        )
-                        PdfReportGenerator.sharePdf(context, file)
+                        if (selectedFormat == ExportFormat.PDF) {
+                            val file = PdfReportGenerator.generateReport(
+                                context = context,
+                                projectName = projectName,
+                                dateRangeLabel = dateRangeLabel,
+                                transactions = filteredTransactions,
+                                members = members,
+                                memberFilterLabel = memberFilterLabel
+                            )
+                            PdfReportGenerator.sharePdf(context, file)
+                        } else {
+                            val file = ExcelReportGenerator.generateReport(
+                                context = context,
+                                projectName = projectName,
+                                dateRangeLabel = dateRangeLabel,
+                                transactions = filteredTransactions,
+                                members = members,
+                                memberFilterLabel = memberFilterLabel
+                            )
+                            ExcelReportGenerator.shareExcel(context, file)
+                        }
                         onDismiss()
                     },
-                    modifier = Modifier.testTag("share_pdf_report_button")
+                    modifier = Modifier.testTag("share_report_button")
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -326,21 +505,38 @@ fun ExportReportDialog(
 
                 Button(
                     onClick = {
-                        val file = PdfReportGenerator.generateReport(
-                            context = context,
-                            projectName = projectName,
-                            dateRangeLabel = dateRangeLabel,
-                            transactions = filteredTransactions,
-                            members = members
-                        )
-                        PdfReportGenerator.openPdf(context, file)
+                        if (selectedFormat == ExportFormat.PDF) {
+                            val file = PdfReportGenerator.generateReport(
+                                context = context,
+                                projectName = projectName,
+                                dateRangeLabel = dateRangeLabel,
+                                transactions = filteredTransactions,
+                                members = members,
+                                memberFilterLabel = memberFilterLabel
+                            )
+                            PdfReportGenerator.openPdf(context, file)
+                        } else {
+                            val file = ExcelReportGenerator.generateReport(
+                                context = context,
+                                projectName = projectName,
+                                dateRangeLabel = dateRangeLabel,
+                                transactions = filteredTransactions,
+                                members = members,
+                                memberFilterLabel = memberFilterLabel
+                            )
+                            ExcelReportGenerator.openExcel(context, file)
+                        }
                         onDismiss()
                     },
-                    modifier = Modifier.testTag("open_pdf_report_button")
+                    modifier = Modifier.testTag("open_report_button")
                 ) {
-                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(
+                        imageVector = if (selectedFormat == ExportFormat.PDF) Icons.Default.PictureAsPdf else Icons.Default.TableChart,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Open PDF")
+                    Text(if (selectedFormat == ExportFormat.PDF) "Open PDF" else "Open Excel")
                 }
             }
         },

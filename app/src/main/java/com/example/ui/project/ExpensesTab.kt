@@ -27,21 +27,28 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CallMade
 import androidx.compose.material.icons.filled.CallReceived
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
@@ -117,6 +124,8 @@ fun ExpensesTab(
 
     var isFabExpanded by remember { mutableStateOf(false) }
     var activeFilter by remember { mutableStateOf(ExpenseTabFilter.ALL) }
+    var selectedMemberUid by remember { mutableStateOf<String?>(null) }
+    var memberFilterMenuExpanded by remember { mutableStateOf(false) }
 
     val totalGave = remember(expenses) {
         expenses.filter { !it.isIncome }.sumOf { it.amount }
@@ -126,11 +135,15 @@ fun ExpensesTab(
     }
     val netBalance = totalGot - totalGave
 
-    val filteredExpenses = remember(expenses, activeFilter) {
-        when (activeFilter) {
-            ExpenseTabFilter.ALL -> expenses
-            ExpenseTabFilter.YOU_GAVE -> expenses.filter { !it.isIncome }
-            ExpenseTabFilter.YOU_GOT -> expenses.filter { it.isIncome }
+    val filteredExpenses = remember(expenses, activeFilter, selectedMemberUid) {
+        expenses.filter { txn ->
+            val matchesType = when (activeFilter) {
+                ExpenseTabFilter.ALL -> true
+                ExpenseTabFilter.YOU_GAVE -> !txn.isIncome
+                ExpenseTabFilter.YOU_GOT -> txn.isIncome
+            }
+            val matchesMember = selectedMemberUid == null || txn.paidByUid == selectedMemberUid
+            matchesType && matchesMember
         }
     }
 
@@ -406,25 +419,179 @@ fun ExpensesTab(
             }
 
             // -------------------------------------------------------------
-            // Filter Chips (All, You Gave, You Got)
+            // Filter Chips (All, You Gave, You Got + Member Filter)
             // -------------------------------------------------------------
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ExpenseTabFilter.values().forEach { filter ->
-                        val count = when (filter) {
-                            ExpenseTabFilter.ALL -> expenses.size
-                            ExpenseTabFilter.YOU_GAVE -> expenses.count { !it.isIncome }
-                            ExpenseTabFilter.YOU_GOT -> expenses.count { it.isIncome }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Type Filters (All, You Gave, You Got)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ExpenseTabFilter.values().forEach { filter ->
+                                val count = when (filter) {
+                                    ExpenseTabFilter.ALL -> if (selectedMemberUid == null) expenses.size else expenses.count { it.paidByUid == selectedMemberUid }
+                                    ExpenseTabFilter.YOU_GAVE -> if (selectedMemberUid == null) expenses.count { !it.isIncome } else expenses.count { !it.isIncome && it.paidByUid == selectedMemberUid }
+                                    ExpenseTabFilter.YOU_GOT -> if (selectedMemberUid == null) expenses.count { it.isIncome } else expenses.count { it.isIncome && it.paidByUid == selectedMemberUid }
+                                }
+                                FilterChip(
+                                    selected = activeFilter == filter,
+                                    onClick = { activeFilter = filter },
+                                    label = { Text("${filter.label} ($count)", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.testTag("filter_chip_${filter.name.lowercase()}")
+                                )
+                            }
                         }
-                        FilterChip(
-                            selected = activeFilter == filter,
-                            onClick = { activeFilter = filter },
-                            label = { Text("${filter.label} ($count)") },
-                            modifier = Modifier.testTag("filter_chip_${filter.name.lowercase()}")
-                        )
+
+                        // Member Filter Dropdown beside You Gave / You Got
+                        Box {
+                            val selectedMemberName = selectedMemberUid?.let { uid ->
+                                members[uid]?.name?.ifBlank { members[uid]?.email } ?: "Partner"
+                            }
+                            val isMemberActive = selectedMemberUid != null
+
+                            FilterChip(
+                                selected = isMemberActive,
+                                onClick = { memberFilterMenuExpanded = true },
+                                label = {
+                                    Text(
+                                        text = if (isMemberActive) "Paid: $selectedMemberName" else "All Members",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (isMemberActive) {
+                                        IconButton(
+                                            onClick = {
+                                                selectedMemberUid = null
+                                                memberFilterMenuExpanded = false
+                                            },
+                                            modifier = Modifier.size(16.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Clear",
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.testTag("filter_chip_member")
+                            )
+
+                            DropdownMenu(
+                                expanded = memberFilterMenuExpanded,
+                                onDismissRequest = { memberFilterMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "All Members (${expenses.size})",
+                                            fontWeight = if (selectedMemberUid == null) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    },
+                                    onClick = {
+                                        selectedMemberUid = null
+                                        memberFilterMenuExpanded = false
+                                    },
+                                    modifier = Modifier.testTag("filter_member_all")
+                                )
+
+                                HorizontalDivider()
+
+                                members.forEach { (uid, member) ->
+                                    val memberName = member.name.ifBlank { member.email }
+                                    val isMe = uid == currentUserId
+                                    val memberTxnCount = expenses.count { it.paidByUid == uid }
+                                    val label = if (isMe) "$memberName (Me)" else memberName
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = "$label ($memberTxnCount)",
+                                                    fontWeight = if (selectedMemberUid == uid) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                                val (memberGave, memberGot) = partnerTotals[uid] ?: (0.0 to 0.0)
+                                                Text(
+                                                    text = "Paid: ${formatIndianCurrency(memberGave)} • Got: ${formatIndianCurrency(memberGot)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = if (selectedMemberUid == uid) Icons.Default.Check else Icons.Default.Person,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (selectedMemberUid == uid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedMemberUid = uid
+                                            memberFilterMenuExpanded = false
+                                        },
+                                        modifier = Modifier.testTag("filter_member_$uid")
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Active Member Filter Chip / Status
+                    if (selectedMemberUid != null) {
+                        val activeMemberName = members[selectedMemberUid]?.name?.ifBlank { members[selectedMemberUid]?.email } ?: "Partner"
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Showing transactions for $activeMemberName (${filteredExpenses.size})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "Clear filter",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { selectedMemberUid = null }
+                                )
+                            }
+                        }
                     }
                 }
             }
