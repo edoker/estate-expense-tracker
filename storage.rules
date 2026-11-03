@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Deny all by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Attachments for project expenses
+    // Storage Path: projects/{projectId}/expenses/{expenseId}/{fileName}
+    match /projects/{projectId}/expenses/{expenseId}/{fileName} {
+
+      function isAuthenticated() {
+        return request.auth != null && request.auth.token.email_verified == true;
+      }
+
+      // Verifies the user is a member of the project in Firestore
+      function isProjectMember(projId) {
+        return isAuthenticated() && (
+          // If the project exists in the default database, verify member UID
+          !firestore.exists(/databases/(default)/documents/projects/$(projId)) ||
+          request.auth.uid in firestore.get(/databases/(default)/documents/projects/$(projId)).data.memberUids
+        );
+      }
+
+      // Read: only project members
+      allow read: if isProjectMember(projectId);
+
+      // Write / Upload: only project members, max 10 MB, image/* or application/pdf
+      allow create, update: if isProjectMember(projectId) &&
+                               request.resource.size <= 10 * 1024 * 1024 &&
+                               (request.resource.contentType.matches('image/.*') ||
+                                request.resource.contentType == 'application/pdf');
+
+      // Delete: only project members
+      allow delete: if isProjectMember(projectId);
+    }
+  }
+}

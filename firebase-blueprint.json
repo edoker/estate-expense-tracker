@@ -1,0 +1,241 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered partner user profile authenticated with Google.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "User's Google display name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's lowercase email address."
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "User's Google profile picture URL if available."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user first logged in. Must be written with FieldValue.serverTimestamp()."
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of most recent login. Must be written with FieldValue.serverTimestamp()."
+        },
+        "fcmTokens": {
+          "type": "array",
+          "description": "List of FCM tokens for push notifications."
+        }
+      },
+      "required": ["displayName", "email", "createdAt", "lastLoginAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Shared infrastructure project shared between partners.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project title."
+        },
+        "adminUid": {
+          "type": "string",
+          "description": "UID of project admin creator."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Array of member user UIDs."
+        },
+        "members": {
+          "type": "object",
+          "description": "Map of uid to {name, email, role: 'admin'|'member'}."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Project creation timestamp."
+        }
+      },
+      "required": ["name", "adminUid", "memberUids", "members", "createdAt"]
+    },
+    "Invite": {
+      "title": "Invite",
+      "description": "Project collaboration invitation by email.",
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "description": "Target project ID."
+        },
+        "projectName": {
+          "type": "string",
+          "description": "Target project name."
+        },
+        "invitedEmail": {
+          "type": "string",
+          "description": "Invited user's lowercase email."
+        },
+        "invitedByUid": {
+          "type": "string",
+          "description": "UID of inviting partner."
+        },
+        "invitedByName": {
+          "type": "string",
+          "description": "Name of inviting partner."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "declined"],
+          "description": "Status of the invite."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Invite creation timestamp."
+        }
+      },
+      "required": ["projectId", "projectName", "invitedEmail", "invitedByUid", "invitedByName", "status", "createdAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Logged supplier payment expense within a project.",
+      "type": "object",
+      "properties": {
+        "supplierName": {
+          "type": "string",
+          "description": "Supplier or vendor name."
+        },
+        "supplierPhone": {
+          "type": "string",
+          "description": "Supplier phone number if picked or entered."
+        },
+        "amount": {
+          "type": "number",
+          "description": "Expense amount in INR."
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date expense was incurred."
+        },
+        "paidByUid": {
+          "type": "string",
+          "description": "UID of project member who paid."
+        },
+        "enteredByUid": {
+          "type": "string",
+          "description": "UID of user who logged the expense."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional notes or details."
+        },
+        "attachments": {
+          "type": "array",
+          "description": "List of attachment URLs."
+        },
+        "isDeleted": {
+          "type": "boolean",
+          "description": "Soft-delete flag."
+        },
+        "deletedByUid": {
+          "type": "string",
+          "description": "UID of member who deleted the expense."
+        },
+        "deletedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Soft-deletion timestamp."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp."
+        },
+        "updatedByUid": {
+          "type": "string",
+          "description": "UID of user who last modified the expense."
+        }
+      },
+      "required": ["supplierName", "amount", "date", "paidByUid", "enteredByUid", "isDeleted", "createdAt", "updatedAt"]
+    },
+    "Audit": {
+      "title": "Audit",
+      "description": "Read-only record of changes to expenses in a project.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["created", "updated", "deleted"],
+          "description": "Action performed."
+        },
+        "entityType": {
+          "type": "string",
+          "description": "Type of entity changed (e.g. 'expense')."
+        },
+        "entityId": {
+          "type": "string",
+          "description": "ID of changed entity."
+        },
+        "actorUid": {
+          "type": "string",
+          "description": "UID of user who performed the action."
+        },
+        "actorName": {
+          "type": "string",
+          "description": "Display name of actor."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Audit event timestamp."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short human-readable summary of the change."
+        },
+        "changes": {
+          "type": "object",
+          "description": "Map of field name to {from, to}."
+        },
+        "snapshot": {
+          "type": "object",
+          "description": "State of entity after the change."
+        }
+      },
+      "required": ["action", "entityType", "entityId", "actorUid", "actorName", "timestamp", "summary"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles keyed by Google auth UID."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Projects managed by partners."
+    },
+    "/invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/Invite" },
+      "description": "Project invitation records."
+    },
+    "/projects/{projectId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Subcollection of expenses for a specific project."
+    },
+    "/projects/{projectId}/audit/{auditId}": {
+      "schema": { "$ref": "#/entities/Audit" },
+      "description": "Subcollection of audit log records for a project."
+    }
+  }
+}

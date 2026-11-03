@@ -1,0 +1,195 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------
+    // Global Helper Functions
+    // -------------------------------------------------------------
+    function isAuthenticated() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isUser(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function getProject(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId));
+    }
+
+    function isProjectMember(projectId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/projects/$(projectId)) &&
+        (request.auth.uid in getProject(projectId).data.memberUids);
+    }
+
+    function isValidProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.adminUid is string && data.adminUid.size() > 0 &&
+             data.memberUids is list && data.memberUids.size() > 0 && data.memberUids.size() <= 50 &&
+             data.members is map &&
+             data.createdAt is timestamp;
+    }
+
+    function isMemberUpdatingProject() {
+      let isMember = request.auth.uid in resource.data.memberUids;
+      let isAdmin = request.auth.uid == resource.data.adminUid;
+      let adminUidUnchanged = request.resource.data.adminUid == resource.data.adminUid;
+
+      // Admin can update project details and manage members/roles (adminUid stays unchanged).
+      // Non-admin existing member can update project details (e.g. name), but cannot modify members or memberUids.
+      let membersRoleCheck = isAdmin || (
+        request.resource.data.memberUids == resource.data.memberUids &&
+        request.resource.data.members == resource.data.members
+      );
+
+      return isAuthenticated() && isMember && adminUidUnchanged && membersRoleCheck && isValidProject(request.resource.data);
+    }
+
+    function isInvitedUserJoining(projectId) {
+      let invitePath = /databases/$(database)/documents/invites/$(projectId + "_" + request.auth.token.email.lower());
+
+      return isAuthenticated() &&
+             'email' in request.auth.token &&
+             !(request.auth.uid in resource.data.memberUids) &&
+             exists(invitePath) &&
+             get(invitePath).data.status == "pending" &&
+             request.resource.data.adminUid == resource.data.adminUid &&
+             request.resource.data.memberUids.hasAll(resource.data.memberUids) &&
+             request.resource.data.memberUids.hasOnly(resource.data.memberUids.concat([request.auth.uid])) &&
+             request.resource.data.memberUids.size() == resource.data.memberUids.size() + 1 &&
+             request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid]) &&
+             request.resource.data.members[request.auth.uid].role == "member" &&
+             isValidProject(request.resource.data);
+    }
+
+    function isValidInvite(data) {
+      return data.projectId is string && data.projectId.size() > 0 &&
+             data.projectName is string && data.projectName.size() > 0 &&
+             data.invitedEmail is string && data.invitedEmail.size() >= 3 &&
+             data.invitedByUid is string && data.invitedByUid.size() > 0 &&
+             data.invitedByName is string && data.invitedByName.size() > 0 &&
+             data.status in ['pending', 'accepted', 'declined'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isInvitedUser(inviteData) {
+      return isAuthenticated() &&
+             'email' in request.auth.token &&
+             'invitedEmail' in inviteData &&
+             inviteData.invitedEmail.lower() == request.auth.token.email.lower();
+    }
+
+    function isInviteProjectMember(inviteData) {
+      return isAuthenticated() &&
+             'projectId' in inviteData &&
+             exists(/databases/$(database)/documents/projects/$(inviteData.projectId)) &&
+             (request.auth.uid in getProject(inviteData.projectId).data.memberUids);
+    }
+
+    // -------------------------------------------------------------
+    // USERS COLLECTION
+    // -------------------------------------------------------------
+    match /users/{uid} {
+      // User can read and write only their own document
+      allow read, write: if isUser(uid);
+    }
+
+    // -------------------------------------------------------------
+    // PROJECTS COLLECTION & SUBCOLLECTIONS
+    // -------------------------------------------------------------
+    match /projects/{projectId} {
+      // Read: only if request.auth.uid is in resource.data.memberUids
+      allow read: if isAuthenticated() && (request.auth.uid in resource.data.memberUids);
+
+      // Create: any signed-in user, but adminUid must equal their uid, memberUids must equal exactly [their uid]
+      allow create: if isAuthenticated() &&
+                      request.resource.data.adminUid == request.auth.uid &&
+                      request.resource.data.memberUids == [request.auth.uid] &&
+                      isValidProject(request.resource.data) &&
+                      request.resource.data.members[request.auth.uid].role == "admin";
+
+      // Update by an existing member OR update by an invited user joining
+      allow update: if (request.auth.uid in resource.data.memberUids && isMemberUpdatingProject()) ||
+                      (!(request.auth.uid in resource.data.memberUids) && isInvitedUserJoining(projectId));
+
+      // Delete: allowed only for the project admin
+      allow delete: if isAuthenticated() && resource.data.adminUid == request.auth.uid;
+
+      // -----------------------------------------------------------
+      // EXPENSES SUBCOLLECTION
+      // -----------------------------------------------------------
+      match /expenses/{expenseId} {
+        // Read: only project members
+        allow read: if isProjectMember(projectId);
+
+        // Create: only project members, enteredByUid & updatedByUid == auth.uid, paidByUid in memberUids, amount > 0
+        allow create: if isProjectMember(projectId) &&
+                        request.resource.data.enteredByUid == request.auth.uid &&
+                        request.resource.data.updatedByUid == request.auth.uid &&
+                        request.resource.data.paidByUid in getProject(projectId).data.memberUids &&
+                        request.resource.data.amount is number && request.resource.data.amount > 0 &&
+                        request.resource.data.supplierName is string && request.resource.data.supplierName.size() > 0 &&
+                        request.resource.data.isDeleted == false;
+
+        // Update: only project members, updatedByUid == auth.uid, paidByUid in memberUids, amount > 0, enteredByUid & createdAt immutable
+        allow update: if isProjectMember(projectId) &&
+                        request.resource.data.updatedByUid == request.auth.uid &&
+                        request.resource.data.paidByUid in getProject(projectId).data.memberUids &&
+                        request.resource.data.amount is number && request.resource.data.amount > 0 &&
+                        request.resource.data.enteredByUid == resource.data.enteredByUid &&
+                        request.resource.data.createdAt == resource.data.createdAt;
+
+        // Delete: not allowed (soft delete only)
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------
+      // AUDIT SUBCOLLECTION
+      // -----------------------------------------------------------
+      match /audit/{auditId} {
+        // Read: project members only
+        allow read: if isProjectMember(projectId);
+
+        // Writes: NEVER allowed from clients. Cloud Functions (Admin SDK) writes audits.
+        allow create, update, delete: if false;
+      }
+    }
+
+    // -------------------------------------------------------------
+    // INVITES COLLECTION
+    // -------------------------------------------------------------
+    match /invites/{inviteId} {
+      // Read: invited user (matching lowercase email) or member of the project
+      allow read: if isAuthenticated() &&
+                    (resource == null || isInvitedUser(resource.data) || isInviteProjectMember(resource.data));
+
+      // Create: requester must be project admin, invitedByUid == auth.uid, status == "pending"
+      allow create: if isAuthenticated() &&
+                      'projectId' in request.resource.data &&
+                      exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+                      getProject(request.resource.data.projectId).data.adminUid == request.auth.uid &&
+                      request.resource.data.invitedByUid == request.auth.uid &&
+                      request.resource.data.status == "pending" &&
+                      isValidInvite(request.resource.data);
+
+      // Update: only the invited user, only to change status to "accepted" or "declined"
+      allow update: if isAuthenticated() &&
+                      isInvitedUser(resource.data) &&
+                      request.resource.data.status in ["accepted", "declined"] &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"]);
+
+      // Delete: only the project admin
+      allow delete: if isAuthenticated() &&
+                      'projectId' in resource.data &&
+                      exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+                      getProject(resource.data.projectId).data.adminUid == request.auth.uid;
+    }
+  }
+}

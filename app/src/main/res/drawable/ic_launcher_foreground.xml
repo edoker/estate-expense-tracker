@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Centered ledger notebook and currency symbol (safe zone inside 66dp) -->
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M34,26 C31.8,26 30,27.8 30,30 L30,78 C30,80.2 31.8,82 34,82 L74,82 C76.2,82 78,80.2 78,78 L78,30 C78,27.8 76.2,26 74,26 Z" />
+    <path
+        android:fillColor="#0D3B31"
+        android:pathData="M38,32 L70,32 C71.1,32 72,32.9 72,34 L72,74 C72,75.1 71.1,76 70,76 L38,76 C36.9,76 36,75.1 36,74 L36,34 C36,32.9 36.9,32 38,32 Z" />
+    <!-- Ledger binder rings / spine lines -->
+    <path
+        android:fillColor="#6EE7B7"
+        android:pathData="M40,38 L44,38 L44,42 L40,42 Z M40,52 L44,52 L44,56 L40,56 Z M40,66 L44,66 L44,70 L40,70 Z" />
+    <!-- Rupee / currency symbol inside the ledger -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,43 L65,43 L65,46 L59,46 C60.8,47 62,48.8 62,51 L65,51 L65,54 L62,54 C61.3,57.5 58.5,60 55,60 L51,60 L62,71 L56.5,71 L47.5,61.5 L47.5,58 L54,58 C56.5,58 58.5,56.2 58.8,54 L51,54 L51,51 L58.8,51 C58.5,49.2 57,48 55,48 L51,48 Z" />
+</vector>
