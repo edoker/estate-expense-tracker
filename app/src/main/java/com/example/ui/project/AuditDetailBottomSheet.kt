@@ -1,47 +1,41 @@
 package com.example.ui.project
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.ChangeCircle
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Audit
+import com.example.data.util.formatDate
 import com.example.data.util.formatDateTime
+import com.example.data.util.formatIndianCurrency
+import com.example.ui.components.PartnerBottomSheet
+import com.example.ui.components.PartnerCard
+import com.example.ui.components.PartnerPrimaryButton
+import com.example.ui.theme.PartnerTheme
+import com.google.firebase.Timestamp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,281 +44,206 @@ fun AuditDetailBottomSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit
 ) {
-    val actionColor = when (audit.action) {
-        "created" -> MaterialTheme.colorScheme.primary
-        "updated" -> MaterialTheme.colorScheme.tertiary
-        "deleted" -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.secondary
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val dimens = PartnerTheme.dimens
+
+    val action = audit.action.lowercase()
+    val (actionTag, actionColor, actionBg) = when (action) {
+        "created" -> Triple("+ CREATED", colors.accent, colors.accentSoft)
+        "deleted" -> Triple("DELETED", colors.dangerRed, colors.redSoft)
+        else -> Triple("EDITED", colors.accent, colors.accentSoft)
     }
 
-    val actionContainerColor = when (audit.action) {
-        "created" -> MaterialTheme.colorScheme.primaryContainer
-        "updated" -> MaterialTheme.colorScheme.tertiaryContainer
-        "deleted" -> MaterialTheme.colorScheme.errorContainer
-        else -> MaterialTheme.colorScheme.secondaryContainer
+    val snapshot = audit.snapshot
+
+    // Extract ONLY the 10 requested fields from snapshot or fallback
+    val dateValue = remember(snapshot, audit) {
+        val rawDate = snapshot["date"]
+        when (rawDate) {
+            is Timestamp -> rawDate.formatDate()
+            is com.google.firebase.Timestamp -> rawDate.formatDate()
+            is Long -> SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(rawDate)
+            is String -> rawDate
+            else -> audit.timestamp?.formatDate() ?: "-"
+        }
     }
 
-    val actionIcon = when (audit.action) {
-        "created" -> Icons.Default.AddCircle
-        "updated" -> Icons.Default.Edit
-        "deleted" -> Icons.Default.Delete
-        else -> Icons.Default.History
+    val supplierName = snapshot["supplierName"]?.toString() ?: "-"
+    val note = snapshot["note"]?.toString() ?: "-"
+
+    val rawAmount = snapshot["amount"]?.toString()?.toDoubleOrNull()
+    val amountFormatted = if (rawAmount != null) formatIndianCurrency(rawAmount) else snapshot["amount"]?.toString() ?: "-"
+
+    val rawType = snapshot["type"]?.toString()?.uppercase() ?: "GAVE"
+    val isGave = rawType == "GAVE"
+    val typeColor = if (isGave) colors.dangerRed else colors.accent
+
+    val attachmentsValue = remember(snapshot) {
+        val raw = snapshot["attachments"]
+        if (raw is List<*>) {
+            if (raw.isEmpty()) "None"
+            else {
+                val first = raw.firstOrNull()
+                if (first is Map<*, *>) {
+                    first["name"]?.toString() ?: first["fileName"]?.toString() ?: "${raw.size} attached"
+                } else {
+                    "${raw.size} file${if (raw.size > 1) "s" else ""}"
+                }
+            }
+        } else {
+            raw?.toString() ?: "None"
+        }
     }
 
-    ModalBottomSheet(
+    val paymentMode = snapshot["paymentMode"]?.toString()?.uppercase() ?: "UPI"
+    val paidByName = snapshot["paidByName"]?.toString()
+        ?: snapshot["paidBy"]?.toString()
+        ?: audit.actorName.ifBlank { "Partner" }
+    val enteredByName = snapshot["enteredByName"]?.toString()
+        ?: audit.actorName.ifBlank { "Partner" }
+    val idValue = audit.entityId.ifBlank { audit.id }
+
+    val formattedHeaderDate = remember(audit.timestamp) {
+        val d = audit.timestamp?.toDate() ?: Date()
+        try {
+            SimpleDateFormat("dd MMM yyyy · hh:mm a", Locale.getDefault()).format(d).uppercase()
+        } catch (e: Exception) {
+            audit.timestamp?.formatDateTime()?.uppercase() ?: ""
+        }
+    }
+
+    PartnerBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.testTag("audit_detail_bottom_sheet")
+        testTag = "audit_detail_bottom_sheet"
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 36.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header: Action chip and title
+            // Header Row: Tag at top (+ CREATED / EDITED / DELETED) and READ-ONLY RECORD
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = actionContainerColor
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = actionIcon,
-                            contentDescription = null,
-                            tint = actionColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = audit.action.uppercase(),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = actionColor
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(actionBg)
+                        .border(dimens.standardBorder, actionColor, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "Read-Only Audit Record",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        text = actionTag,
+                        style = typography.smallLabel.copy(fontSize = 11.sp),
+                        color = actionColor
                     )
                 }
+
+                Text(
+                    text = "READ-ONLY RECORD",
+                    style = typography.smallLabel.copy(fontSize = 11.sp),
+                    color = colors.textMuted
+                )
             }
 
-            // Summary text
+            // Summary Title
             Text(
                 text = audit.summary,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = typography.screenTitle.copy(fontSize = 20.sp, lineHeight = 26.sp),
+                color = colors.text,
                 modifier = Modifier.testTag("audit_detail_summary")
             )
 
-            // Actor & Timestamp Info
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                )
-            ) {
+            // Subtitle: Time
+            Text(
+                text = formattedHeaderDate,
+                style = typography.smallLabel.copy(fontSize = 11.5.sp),
+                color = colors.textMuted
+            )
+
+            // Card with ONLY the requested clean label/value rows:
+            // date, supplierName, note, amount, attachments, paymentMode, paidByName, type, enteredByName, id
+            PartnerCard {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Actor: ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = audit.actorName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    AuditItemRow("DATE", dateValue)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Timestamp: ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = audit.timestamp.formatDateTime(),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
+                    AuditItemRow("SUPPLIER", supplierName)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Expense ID: ",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                        Text(
-                            text = audit.entityId,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
+                    AuditItemRow("NOTE", note)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("AMOUNT", amountFormatted, valueColor = typeColor)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("ATTACHMENTS", attachmentsValue, valueColor = colors.accent)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("PAYMENT MODE", paymentMode)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("PAID BY", paidByName)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("TYPE", rawType, valueColor = typeColor)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("ENTERED BY", enteredByName)
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                    AuditItemRow("ID", idValue)
                 }
             }
 
-            // Changes section (for updates)
-            if (audit.changes.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Field Changes",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+            Spacer(modifier = Modifier.height(4.dp))
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            audit.changes.forEach { (fieldName, change) ->
-                                val fromVal = change["from"]?.toString() ?: "(empty)"
-                                val toVal = change["to"]?.toString() ?: "(empty)"
-
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        text = fieldName.replaceFirstChar { it.uppercase() },
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = fromVal,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowForward,
-                                            contentDescription = "changed to",
-                                            modifier = Modifier.size(14.dp),
-                                            tint = MaterialTheme.colorScheme.outline
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = toVal,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                }
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Snapshot section
-            if (audit.snapshot.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Expense State Snapshot",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            audit.snapshot.forEach { (k, v) ->
-                                if (v != null && v.toString().isNotBlank()) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = k,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = v.toString(),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Dismiss Button
-            Button(
+            // Big CLOSE Button
+            PartnerPrimaryButton(
+                text = "CLOSE",
                 onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().testTag("close_audit_sheet_button")
-            ) {
-                Text("Close Details")
-            }
+                testTag = "audit_close_button"
+            )
         }
+    }
+}
+
+@Composable
+private fun AuditItemRow(
+    label: String,
+    value: String,
+    valueColor: androidx.compose.ui.graphics.Color = PartnerTheme.colors.text
+) {
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = typography.smallLabel,
+            color = colors.textMuted
+        )
+        Text(
+            text = value,
+            style = typography.bodyBold,
+            color = valueColor,
+            maxLines = 1
+        )
     }
 }

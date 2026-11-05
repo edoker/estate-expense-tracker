@@ -78,21 +78,21 @@ fun AppNavigation(
                 }
             }
 
+            val projectsViewModel: ProjectsViewModel = viewModel(
+                key = "projects_${state.user.uid}",
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return ProjectsViewModel(projectRepository, state.user) as T
+                    }
+                }
+            )
+
             NavHost(
                 navController = navController,
                 startDestination = "home"
             ) {
                 composable("home") {
-                    val projectsViewModel: ProjectsViewModel = viewModel(
-                        key = "projects_${state.user.uid}",
-                        factory = object : ViewModelProvider.Factory {
-                            @Suppress("UNCHECKED_CAST")
-                            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                return ProjectsViewModel(projectRepository, state.user) as T
-                            }
-                        }
-                    )
-
                     val projects by projectsViewModel.projects.collectAsStateWithLifecycle()
                     val pendingInvites by projectsViewModel.pendingInvites.collectAsStateWithLifecycle()
                     val operationMessage by projectsViewModel.operationMessage.collectAsStateWithLifecycle()
@@ -188,6 +188,8 @@ fun AppNavigation(
                         },
                         onDeleteProject = {
                             detailViewModel.deleteProject {
+                                projectsViewModel.notifyProjectDeleted()
+                                android.widget.Toast.makeText(context, "Project deleted successfully", android.widget.Toast.LENGTH_SHORT).show()
                                 navController.popBackStack()
                             }
                         },

@@ -50,12 +50,17 @@ class ProjectsViewModel(
             val result = projectRepository.createProject(name, currentUser)
             _isProcessing.value = false
             result.onSuccess { projectId ->
-                _operationMessage.value = "Project created successfully"
+                // Clear any pending message before immediate navigation
+                _operationMessage.value = null
                 onSuccess(projectId)
             }.onFailure { error ->
                 _operationMessage.value = error.localizedMessage ?: "Failed to create project"
             }
         }
+    }
+
+    fun notifyProjectDeleted() {
+        _operationMessage.value = "Project deleted successfully"
     }
 
     fun acceptInvite(invite: Invite) {

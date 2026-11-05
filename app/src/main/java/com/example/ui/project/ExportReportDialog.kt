@@ -1,5 +1,7 @@
 package com.example.ui.project
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,41 +11,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -52,9 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.Expense
 import com.example.data.model.ProjectMember
@@ -62,13 +41,18 @@ import com.example.data.util.ExcelReportGenerator
 import com.example.data.util.PdfReportGenerator
 import com.example.data.util.formatDate
 import com.example.data.util.formatIndianCurrency
+import com.example.ui.components.PartnerBottomSheet
+import com.example.ui.components.PartnerCard
+import com.example.ui.components.PartnerChip
+import com.example.ui.components.PartnerPrimaryButton
+import com.example.ui.theme.PartnerTheme
 import com.google.firebase.Timestamp
 import java.util.Calendar
 import java.util.Date
 
-enum class ExportFormat(val label: String, val extension: String) {
-    PDF("PDF Document", ".pdf"),
-    EXCEL("Excel Sheet (.xlsx)", ".xlsx")
+enum class ExportFormat(val label: String) {
+    PDF("PDF Document"),
+    EXCEL("Excel Sheet (.xlsx)")
 }
 
 enum class DateRangePreset(val label: String) {
@@ -78,7 +62,7 @@ enum class DateRangePreset(val label: String) {
     CUSTOM("Custom Range")
 }
 
-enum class TransactionTypeFilter(val label: String) {
+enum class ExportTypeFilter(val label: String) {
     ALL("All"),
     YOU_GAVE("You Gave"),
     YOU_GOT("You Got")
@@ -93,14 +77,17 @@ fun ExportReportDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val dimens = PartnerTheme.dimens
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var selectedFormat by remember { mutableStateOf(ExportFormat.PDF) }
     var selectedPreset by remember { mutableStateOf(DateRangePreset.THIS_MONTH) }
-    var selectedTypeFilter by remember { mutableStateOf(TransactionTypeFilter.ALL) }
+    var selectedTypeFilter by remember { mutableStateOf(ExportTypeFilter.ALL) }
     var selectedMemberUid by remember { mutableStateOf<String?>(null) }
     var memberFilterMenuExpanded by remember { mutableStateOf(false) }
 
-    // Calculate dates for This Month
     val now = Calendar.getInstance()
     val startOfMonth = (now.clone() as Calendar).apply {
         set(Calendar.DAY_OF_MONTH, 1)
@@ -116,7 +103,6 @@ fun ExportReportDialog(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
 
-    // Filter transactions based on selection
     val filteredTransactions = remember(transactions, selectedPreset, customStartDate, customEndDate, selectedTypeFilter, selectedMemberUid) {
         val (startTime, endTime) = when (selectedPreset) {
             DateRangePreset.ALL_TIME -> 0L to Long.MAX_VALUE
@@ -126,15 +112,13 @@ fun ExportReportDialog(
                 cal.set(Calendar.HOUR_OF_DAY, 0)
                 cal.set(Calendar.MINUTE, 0)
                 cal.set(Calendar.SECOND, 0)
-                val start = cal.timeInMillis
-                start to System.currentTimeMillis()
+                cal.timeInMillis to System.currentTimeMillis()
             }
             DateRangePreset.LAST_30_DAYS -> {
                 val start = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
                 start to System.currentTimeMillis()
             }
             DateRangePreset.CUSTOM -> {
-                // Ensure end of day for custom end date
                 val cal = Calendar.getInstance().apply {
                     timeInMillis = customEndDate
                     set(Calendar.HOUR_OF_DAY, 23)
@@ -146,262 +130,246 @@ fun ExportReportDialog(
         }
 
         transactions.filter { txn ->
-            val txnTime = txn.date?.toDate()?.time ?: 0L
-            val dateMatches = txnTime in startTime..endTime
-            val typeMatches = when (selectedTypeFilter) {
-                TransactionTypeFilter.ALL -> true
-                TransactionTypeFilter.YOU_GAVE -> !txn.isIncome
-                TransactionTypeFilter.YOU_GOT -> txn.isIncome
+            val txnTime = (txn.date ?: txn.createdAt ?: Timestamp.now()).toDate().time
+            val inDateRange = txnTime in startTime..endTime
+            val inType = when (selectedTypeFilter) {
+                ExportTypeFilter.ALL -> true
+                ExportTypeFilter.YOU_GAVE -> !txn.isIncome
+                ExportTypeFilter.YOU_GOT -> txn.isIncome
             }
-            val memberMatches = selectedMemberUid == null || txn.paidByUid == selectedMemberUid
-            dateMatches && typeMatches && memberMatches
+            val inMember = selectedMemberUid == null || txn.paidByUid == selectedMemberUid
+            inDateRange && inType && inMember
         }
     }
 
-    val totalGave = remember(filteredTransactions) {
+    val totalGiven = remember(filteredTransactions) {
         filteredTransactions.filter { !it.isIncome }.sumOf { it.amount }
     }
-    val totalGot = remember(filteredTransactions) {
+    val totalReceived = remember(filteredTransactions) {
         filteredTransactions.filter { it.isIncome }.sumOf { it.amount }
     }
+    val netBalance = totalReceived - totalGiven
 
-    val dateRangeLabel = when (selectedPreset) {
-        DateRangePreset.ALL_TIME -> "All Time"
-        DateRangePreset.THIS_MONTH -> "This Month"
-        DateRangePreset.LAST_30_DAYS -> "Last 30 Days"
-        DateRangePreset.CUSTOM -> {
-            "${Timestamp(Date(customStartDate)).formatDate()} - ${Timestamp(Date(customEndDate)).formatDate()}"
-        }
-    }
-
-    AlertDialog(
+    PartnerBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (selectedFormat == ExportFormat.PDF) Icons.Default.PictureAsPdf else Icons.Default.TableChart,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
+        sheetState = sheetState,
+        testTag = "export_report_dialog"
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = "Export Ledger Report",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    text = "Export Report",
+                    style = typography.screenTitle,
+                    color = colors.text
+                )
+                Text(
+                    text = "CANCEL",
+                    style = typography.smallLabel,
+                    color = colors.textMuted,
+                    modifier = Modifier
+                        .clickable(onClick = onDismiss)
+                        .testTag("cancel_export_button")
                 )
             }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // Format Selection Section
+
+            // 1. Format Selection: PDF / Excel chips
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Report Format",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
+                    text = "REPORT FORMAT",
+                    style = typography.smallLabel,
+                    color = colors.textMuted,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PartnerChip(
+                        label = "PDF Document",
+                        selected = selectedFormat == ExportFormat.PDF,
+                        onClick = { selectedFormat = ExportFormat.PDF },
+                        modifier = Modifier.weight(1f),
+                        testTag = "format_pdf_chip"
+                    )
+
+                    PartnerChip(
+                        label = "Excel Sheet (.xlsx)",
+                        selected = selectedFormat == ExportFormat.EXCEL,
+                        onClick = { selectedFormat = ExportFormat.EXCEL },
+                        modifier = Modifier.weight(1f),
+                        testTag = "format_excel_chip"
+                    )
+                }
+            }
+
+            // 2. Date Range: Preset chips + Custom Range as full-width row
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "DATE PERIOD",
+                    style = typography.smallLabel,
+                    color = colors.textMuted,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ExportFormat.values().forEach { format ->
-                        FilterChip(
-                            selected = selectedFormat == format,
-                            onClick = { selectedFormat = format },
-                            label = { Text(format.label, style = MaterialTheme.typography.bodySmall) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (format == ExportFormat.PDF) Icons.Default.PictureAsPdf else Icons.Default.TableChart,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            modifier = Modifier.testTag("export_format_${format.name.lowercase()}")
-                        )
-                    }
+                    PartnerChip(
+                        label = "All Time",
+                        selected = selectedPreset == DateRangePreset.ALL_TIME,
+                        onClick = { selectedPreset = DateRangePreset.ALL_TIME },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PartnerChip(
+                        label = "This Month",
+                        selected = selectedPreset == DateRangePreset.THIS_MONTH,
+                        onClick = { selectedPreset = DateRangePreset.THIS_MONTH },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PartnerChip(
+                        label = "Last 30 Days",
+                        selected = selectedPreset == DateRangePreset.LAST_30_DAYS,
+                        onClick = { selectedPreset = DateRangePreset.LAST_30_DAYS },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Date Range Section
-                Text(
-                    text = "Date Period",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Row(
+                // Custom Range as full-width row per mockup specification
+                PartnerChip(
+                    label = "Custom Date Range",
+                    selected = selectedPreset == DateRangePreset.CUSTOM,
+                    onClick = { selectedPreset = DateRangePreset.CUSTOM },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    DateRangePreset.values().forEach { preset ->
-                        FilterChip(
-                            selected = selectedPreset == preset,
-                            onClick = { selectedPreset = preset },
-                            label = { Text(preset.label, style = MaterialTheme.typography.bodySmall) }
-                        )
-                    }
-                }
+                    testTag = "preset_custom_chip"
+                )
 
                 if (selectedPreset == DateRangePreset.CUSTOM) {
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        OutlinedTextField(
-                            value = Timestamp(Date(customStartDate)).formatDate(),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("From") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.CalendarToday,
-                                    contentDescription = "Select Start Date",
-                                    modifier = Modifier.clickable { showStartDatePicker = true }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("FROM", style = typography.smallLabel, color = colors.textMuted)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(dimens.buttonRadius))
+                                    .background(colors.surface)
+                                    .border(dimens.standardBorder, colors.border, RoundedCornerShape(dimens.buttonRadius))
+                                    .clickable { showStartDatePicker = true }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = Timestamp(Date(customStartDate)).formatDate(),
+                                    style = typography.bodyBold,
+                                    color = colors.text
                                 )
-                            },
-                            modifier = Modifier.weight(1f).clickable { showStartDatePicker = true }
-                        )
+                            }
+                        }
 
-                        OutlinedTextField(
-                            value = Timestamp(Date(customEndDate)).formatDate(),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("To") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.CalendarToday,
-                                    contentDescription = "Select End Date",
-                                    modifier = Modifier.clickable { showEndDatePicker = true }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("TO", style = typography.smallLabel, color = colors.textMuted)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(dimens.buttonRadius))
+                                    .background(colors.surface)
+                                    .border(dimens.standardBorder, colors.border, RoundedCornerShape(dimens.buttonRadius))
+                                    .clickable { showEndDatePicker = true }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = Timestamp(Date(customEndDate)).formatDate(),
+                                    style = typography.bodyBold,
+                                    color = colors.text
                                 )
-                            },
-                            modifier = Modifier.weight(1f).clickable { showEndDatePicker = true }
-                        )
+                            }
+                        }
                     }
                 }
+            }
 
-                // Type & Member Filter Section
+            // 3. Type & Member Filter Chips
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Transaction & Member Filters",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
+                    text = "TRANSACTION TYPE & MEMBER",
+                    style = typography.smallLabel,
+                    color = colors.textMuted,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Type Filters (All, You Gave, You Got)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TransactionTypeFilter.values().forEach { filter ->
-                            FilterChip(
-                                selected = selectedTypeFilter == filter,
-                                onClick = { selectedTypeFilter = filter },
-                                label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) }
-                            )
-                        }
-                    }
+                    PartnerChip(
+                        label = "All",
+                        selected = selectedTypeFilter == ExportTypeFilter.ALL,
+                        onClick = { selectedTypeFilter = ExportTypeFilter.ALL }
+                    )
+                    PartnerChip(
+                        label = "Gave",
+                        selected = selectedTypeFilter == ExportTypeFilter.YOU_GAVE,
+                        onClick = { selectedTypeFilter = ExportTypeFilter.YOU_GAVE }
+                    )
+                    PartnerChip(
+                        label = "Got",
+                        selected = selectedTypeFilter == ExportTypeFilter.YOU_GOT,
+                        onClick = { selectedTypeFilter = ExportTypeFilter.YOU_GOT }
+                    )
 
-                    // Member Filter Dropdown beside type filters
+                    // Member selector chip
                     Box {
-                        val selectedMemberName = selectedMemberUid?.let { uid ->
-                            members[uid]?.name?.ifBlank { members[uid]?.email } ?: "Partner"
+                        val memberLabel = if (selectedMemberUid == null) "All Members ⌵" else {
+                            val name = members[selectedMemberUid]?.name?.ifBlank { members[selectedMemberUid]?.email } ?: "Partner"
+                            "${name.take(6)} ⌵"
                         }
-                        val isMemberActive = selectedMemberUid != null
 
-                        FilterChip(
-                            selected = isMemberActive,
-                            onClick = { memberFilterMenuExpanded = true },
-                            label = {
-                                Text(
-                                    text = if (isMemberActive) "Paid: $selectedMemberName" else "All Members",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                if (isMemberActive) {
-                                    IconButton(
-                                        onClick = {
-                                            selectedMemberUid = null
-                                            memberFilterMenuExpanded = false
-                                        },
-                                        modifier = Modifier.size(16.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Clear",
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                    }
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            },
-                            modifier = Modifier.testTag("export_member_filter_chip")
+                        PartnerChip(
+                            label = memberLabel,
+                            selected = selectedMemberUid != null,
+                            onClick = { memberFilterMenuExpanded = true }
                         )
 
                         DropdownMenu(
                             expanded = memberFilterMenuExpanded,
-                            onDismissRequest = { memberFilterMenuExpanded = false }
+                            onDismissRequest = { memberFilterMenuExpanded = false },
+                            modifier = Modifier.background(colors.surface)
                         ) {
                             DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "All Members",
-                                        fontWeight = if (selectedMemberUid == null) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                                text = { Text("All Members", style = typography.body, color = colors.text) },
                                 onClick = {
                                     selectedMemberUid = null
                                     memberFilterMenuExpanded = false
                                 }
                             )
-
-                            HorizontalDivider()
-
                             members.forEach { (uid, member) ->
                                 val name = member.name.ifBlank { member.email }
-                                val count = transactions.count { it.paidByUid == uid }
                                 DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "$name ($count)",
-                                            fontWeight = if (selectedMemberUid == uid) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = if (selectedMemberUid == uid) Icons.Default.Check else Icons.Default.Person,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = if (selectedMemberUid == uid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    },
+                                    text = { Text(name, style = typography.body, color = colors.text) },
                                     onClick = {
                                         selectedMemberUid = uid
                                         memberFilterMenuExpanded = false
@@ -411,143 +379,95 @@ fun ExportReportDialog(
                         }
                     }
                 }
+            }
 
-                // Report Preview Card
-                OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+            // 4. Summary Preview
+            PartnerCard {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = "Report Summary Preview",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        val previewLabel = if (selectedMemberUid != null) {
-                            val name = members[selectedMemberUid]?.name?.ifBlank { members[selectedMemberUid]?.email } ?: "Partner"
-                            "${filteredTransactions.size} transactions (Filtered by $name)"
-                        } else {
-                            "${filteredTransactions.size} transaction${if (filteredTransactions.size != 1) "s" else ""}"
-                        }
-                        Text(
-                            text = previewLabel,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Total Got (In):", style = MaterialTheme.typography.bodySmall)
-                            Text(
-                                formatIndianCurrency(totalGot),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Total Gave (Out):", style = MaterialTheme.typography.bodySmall)
-                            Text(
-                                formatIndianCurrency(totalGave),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
+                        Text("ENTRIES TO EXPORT", style = typography.smallLabel, color = colors.textMuted)
+                        Text("${filteredTransactions.size} records", style = typography.bodyBold, color = colors.text)
+                    }
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("TOTAL GIVEN", style = typography.smallLabel, color = colors.textMuted)
+                        Text(formatIndianCurrency(totalGiven), style = typography.bodyBold, color = colors.dangerRed)
+                    }
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("TOTAL RECEIVED", style = typography.smallLabel, color = colors.textMuted)
+                        Text(formatIndianCurrency(totalReceived), style = typography.bodyBold, color = colors.accent)
+                    }
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("NET BALANCE", style = typography.smallLabel, color = colors.textMuted)
+                        val netColor = if (netBalance >= 0) colors.accent else colors.dangerRed
+                        val prefix = if (netBalance >= 0) "+ " else "− "
+                        Text("$prefix${formatIndianCurrency(kotlin.math.abs(netBalance))}", style = typography.bodyBold, color = netColor)
                     }
                 }
             }
-        },
-        confirmButton = {
-            val memberFilterLabel = selectedMemberUid?.let { uid ->
-                members[uid]?.name?.ifBlank { members[uid]?.email } ?: "Partner"
-            }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = {
-                        if (selectedFormat == ExportFormat.PDF) {
-                            val file = PdfReportGenerator.generateReport(
-                                context = context,
-                                projectName = projectName,
-                                dateRangeLabel = dateRangeLabel,
-                                transactions = filteredTransactions,
-                                members = members,
-                                memberFilterLabel = memberFilterLabel
-                            )
-                            PdfReportGenerator.sharePdf(context, file)
-                        } else {
-                            val file = ExcelReportGenerator.generateReport(
-                                context = context,
-                                projectName = projectName,
-                                dateRangeLabel = dateRangeLabel,
-                                transactions = filteredTransactions,
-                                members = members,
-                                memberFilterLabel = memberFilterLabel
-                            )
-                            ExcelReportGenerator.shareExcel(context, file)
-                        }
-                        onDismiss()
-                    },
-                    modifier = Modifier.testTag("share_report_button")
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Share")
-                }
+            Spacer(modifier = Modifier.height(4.dp))
 
-                Button(
-                    onClick = {
-                        if (selectedFormat == ExportFormat.PDF) {
-                            val file = PdfReportGenerator.generateReport(
-                                context = context,
-                                projectName = projectName,
-                                dateRangeLabel = dateRangeLabel,
-                                transactions = filteredTransactions,
-                                members = members,
-                                memberFilterLabel = memberFilterLabel
-                            )
-                            PdfReportGenerator.openPdf(context, file)
-                        } else {
-                            val file = ExcelReportGenerator.generateReport(
-                                context = context,
-                                projectName = projectName,
-                                dateRangeLabel = dateRangeLabel,
-                                transactions = filteredTransactions,
-                                members = members,
-                                memberFilterLabel = memberFilterLabel
-                            )
-                            ExcelReportGenerator.openExcel(context, file)
-                        }
-                        onDismiss()
-                    },
-                    modifier = Modifier.testTag("open_report_button")
-                ) {
-                    Icon(
-                        imageVector = if (selectedFormat == ExportFormat.PDF) Icons.Default.PictureAsPdf else Icons.Default.TableChart,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (selectedFormat == ExportFormat.PDF) "Open PDF" else "Open Excel")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            // Primary action: Export Report
+            val selectedMemberName = selectedMemberUid?.let { members[it]?.name?.ifBlank { members[it]?.email } }
+            PartnerPrimaryButton(
+                text = "EXPORT ${if (selectedFormat == ExportFormat.PDF) "PDF" else "EXCEL"} REPORT",
+                onClick = {
+                    val dateRangeString = when (selectedPreset) {
+                        DateRangePreset.ALL_TIME -> "All Time"
+                        DateRangePreset.THIS_MONTH -> "This Month"
+                        DateRangePreset.LAST_30_DAYS -> "Last 30 Days"
+                        DateRangePreset.CUSTOM -> "${Timestamp(Date(customStartDate)).formatDate()} - ${Timestamp(Date(customEndDate)).formatDate()}"
+                    }
+
+                    if (selectedFormat == ExportFormat.PDF) {
+                        val file = PdfReportGenerator.generateReport(
+                            context = context,
+                            projectName = projectName,
+                            dateRangeLabel = dateRangeString,
+                            transactions = filteredTransactions,
+                            members = members,
+                            memberFilterLabel = selectedMemberName
+                        )
+                        PdfReportGenerator.sharePdf(context, file)
+                    } else {
+                        val file = ExcelReportGenerator.generateReport(
+                            context = context,
+                            projectName = projectName,
+                            dateRangeLabel = dateRangeString,
+                            transactions = filteredTransactions,
+                            members = members,
+                            memberFilterLabel = selectedMemberName
+                        )
+                        ExcelReportGenerator.shareExcel(context, file)
+                    }
+                    onDismiss()
+                },
+                enabled = filteredTransactions.isNotEmpty(),
+                testTag = "confirm_export_button"
+            )
         }
-    )
+    }
 
-    // Custom Date Pickers
     if (showStartDatePicker) {
         val datePickerState = rememberDatePickerState(initialSelectedDateMillis = customStartDate)
         DatePickerDialog(
@@ -556,10 +476,14 @@ fun ExportReportDialog(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { customStartDate = it }
                     showStartDatePicker = false
-                }) { Text("OK") }
+                }) {
+                    Text("OK", style = typography.bodyBold, color = colors.accent)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text("Cancel", style = typography.body, color = colors.textMuted)
+                }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -574,10 +498,14 @@ fun ExportReportDialog(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { customEndDate = it }
                     showEndDatePicker = false
-                }) { Text("OK") }
+                }) {
+                    Text("OK", style = typography.bodyBold, color = colors.accent)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text("Cancel", style = typography.body, color = colors.textMuted)
+                }
             }
         ) {
             DatePicker(state = datePickerState)

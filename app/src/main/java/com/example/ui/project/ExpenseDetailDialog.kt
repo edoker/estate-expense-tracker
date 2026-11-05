@@ -1,17 +1,22 @@
 package com.example.ui.project
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,36 +24,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Notes
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,22 +42,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.Expense
 import com.example.data.model.ExpenseAttachment
 import com.example.data.model.ProjectMember
 import com.example.data.util.AttachmentManager
 import com.example.data.util.formatDate
 import com.example.data.util.formatIndianCurrency
+import com.example.ui.components.PartnerBottomSheet
+import com.example.ui.components.PartnerCard
+import com.example.ui.components.PartnerDangerButton
+import com.example.ui.components.PartnerIcon
+import com.example.ui.components.PartnerIconType
+import com.example.ui.components.PartnerOutlinedButton
+import com.example.ui.components.PartnerPrimaryButton
+import com.example.ui.components.PartnerSquareIconButton
+import com.example.ui.theme.PartnerTheme
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseDetailDialog(
     expense: Expense,
@@ -84,363 +78,353 @@ fun ExpenseDetailDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val dimens = PartnerTheme.dimens
 
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var selectedImageForViewer by remember { mutableStateOf<ExpenseAttachment?>(null) }
-    var attachmentToDelete by remember { mutableStateOf<ExpenseAttachment?>(null) }
     var isOpeningPdf by remember { mutableStateOf(false) }
 
+    val isIncome = expense.isIncome
     val payerName = members[expense.paidByUid]?.name?.ifBlank { members[expense.paidByUid]?.email }
-        ?: "Partner (${expense.paidByUid.take(6)})"
+        ?: "Partner"
     val entererName = members[expense.enteredByUid]?.name?.ifBlank { members[expense.enteredByUid]?.email }
-        ?: "Partner (${expense.enteredByUid.take(6)})"
+        ?: "Partner"
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(
-                    text = expense.supplierName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+    BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background)
+    ) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("expense_detail_dialog"),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column(modifier = Modifier.padding(start = 4.dp)) {
+                            Text(
+                                text = "Entry details",
+                                style = typography.screenTitle,
+                                color = colors.text
+                            )
+                            Text(
+                                text = "PARTNER ACCESS",
+                                style = typography.smallLabel,
+                                color = colors.textMuted
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        Box(modifier = Modifier.padding(start = 12.dp)) {
+                            PartnerSquareIconButton(
+                                iconType = PartnerIconType.BACK,
+                                onClick = onDismiss,
+                                modifier = Modifier.testTag("detail_close_button")
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
                 )
-                if (!expense.supplierPhone.isNullOrBlank()) {
+            },
+            bottomBar = {
+                // Bottom Actions: Red-outline Delete button + Large EDIT ENTRY primary button
+                Surface(
+                    color = colors.background,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding()
+                ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = dimens.screenPadding)
+                            .padding(top = 10.dp, bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Phone,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
+                        PartnerDangerButton(
+                            text = "Delete",
+                            onClick = { showDeleteConfirmation = true },
+                            modifier = Modifier.testTag("delete_expense_button")
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = expense.supplierPhone,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            PartnerPrimaryButton(
+                                text = "EDIT ENTRY",
+                                onClick = onEdit,
+                                testTag = "edit_expense_button"
+                            )
+                        }
                     }
                 }
-            }
-        },
-        text = {
+            },
+            containerColor = colors.background
+        ) { innerPadding ->
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = dimens.screenPadding)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Large amount display with Type badge
-                val isIncome = expense.isIncome
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isIncome) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // -------------------------------------------------------------
+                // Hero Card: red or teal tinted, 2.5px border, bold arrow icon,
+                // label "AMOUNT PAID · YOU GAVE" or "AMOUNT RECEIVED · YOU GOT",
+                // 36px signed amount, supplier name, phone
+                // -------------------------------------------------------------
+                val heroBg = if (isIncome) colors.accentSoft else colors.redSoft
+                val heroBorder = if (isIncome) colors.accent else colors.dangerRed
+                val heroAmountColor = if (isIncome) colors.accent else colors.dangerRed
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(dimens.cardRadius))
+                        .background(heroBg)
+                        .border(dimens.thickBorder, heroBorder, RoundedCornerShape(dimens.cardRadius))
+                        .padding(20.dp)
+                        .testTag("hero_amount_card")
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PartnerIcon(
+                                type = if (isIncome) PartnerIconType.ARROW_IN else PartnerIconType.ARROW_OUT,
+                                tint = heroBorder,
+                                size = 20.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isIncome) "AMOUNT RECEIVED · YOU GOT" else "AMOUNT PAID · YOU GAVE",
+                                style = typography.smallLabel,
+                                color = heroBorder
+                            )
+                        }
+
+                        // 36px signed amount
+                        val sign = if (isIncome) "+ " else "− "
                         Text(
-                            text = if (isIncome) "AMOUNT RECEIVED (YOU GOT)" else "AMOUNT PAID (YOU GAVE)",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isIncome) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onPrimaryContainer
+                            text = "$sign${formatIndianCurrency(expense.amount)}",
+                            style = typography.heroAmount,
+                            color = heroAmountColor,
+                            modifier = Modifier.testTag("detail_hero_amount")
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        // Supplier name
                         Text(
-                            text = (if (isIncome) "+" else "-") + formatIndianCurrency(expense.amount),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Black,
-                            color = if (isIncome) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                            text = expense.supplierName,
+                            style = typography.cardName,
+                            color = colors.text
                         )
+
+                        // Supplier phone if available
+                        if (!expense.supplierPhone.isNullOrBlank()) {
+                            Text(
+                                text = expense.supplierPhone,
+                                style = typography.body,
+                                color = colors.textMuted,
+                                modifier = Modifier.clickable {
+                                    val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${expense.supplierPhone}"))
+                                    context.startActivity(dialIntent)
+                                }
+                            )
+                        }
                     }
                 }
 
-                // Payment Details
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                    )
-                ) {
+                // -------------------------------------------------------------
+                // Details Card: Date, Mode, Paid/Received By, Entered By, Note
+                // -------------------------------------------------------------
+                PartnerCard {
                     Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Date: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(text = expense.date.formatDate(), style = MaterialTheme.typography.bodyMedium)
-                        }
+                        DetailItemRow(
+                            label = "DATE",
+                            value = (expense.date ?: expense.createdAt ?: Timestamp.now()).formatDate()
+                        )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val modeIcon = when (expense.paymentMode) {
-                                "Cash" -> Icons.Default.Payments
-                                "Cheque" -> Icons.Default.ReceiptLong
-                                "Netbanking" -> Icons.Default.AccountBalance
-                                else -> Icons.Default.QrCode2
-                            }
-                            Icon(modeIcon, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Payment Mode: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                        DetailItemRow(
+                            label = "MODE",
+                            value = expense.paymentMode.ifBlank { "UPI" }.uppercase()
+                        )
+
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                        DetailItemRow(
+                            label = if (isIncome) "RECEIVED BY" else "PAID BY",
+                            value = payerName
+                        )
+
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                        DetailItemRow(
+                            label = "ENTERED BY",
+                            value = entererName
+                        )
+
+                        if (!expense.note.isNullOrBlank()) {
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
-                                    text = expense.paymentMode.ifBlank { "UPI" },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    text = "NOTE",
+                                    style = typography.smallLabel,
+                                    color = colors.textMuted
+                                )
+                                Text(
+                                    text = expense.note,
+                                    style = typography.bodyBold,
+                                    color = colors.text
                                 )
                             }
                         }
+                    }
+                }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = if (isIncome) "Received By: " else "Paid By: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(text = payerName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        }
+                // -------------------------------------------------------------
+                // Attachments Card (thumbnails, file name, size, tap to view)
+                // -------------------------------------------------------------
+                if (expense.attachments.isNotEmpty()) {
+                    PartnerCard {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "ATTACHMENTS ${expense.attachments.size}",
+                                style = typography.smallLabel,
+                                color = colors.textMuted
+                            )
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Entered By: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(text = entererName, style = MaterialTheme.typography.bodyMedium)
-                        }
+                            expense.attachments.forEach { att ->
+                                val isPdf = att.isPdf
 
-                        if (!expense.note.isNullOrBlank()) {
-                            Row(verticalAlignment = Alignment.Top) {
-                                Icon(Icons.Default.Notes, contentDescription = null, modifier = Modifier.size(16.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(text = "Note:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                    Text(text = expense.note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(dimens.iconSquareRadius))
+                                        .clickable {
+                                            if (isPdf) {
+                                                coroutineScope.launch {
+                                                    isOpeningPdf = true
+                                                    val result = AttachmentManager.openPdf(context, att)
+                                                    isOpeningPdf = false
+                                                    result.onFailure {
+                                                        Toast.makeText(context, "Could not open PDF file", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            } else {
+                                                selectedImageForViewer = att
+                                            }
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // 44px rounded square with thumbnail/icon
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(dimens.iconSquareRadius))
+                                            .background(colors.surface)
+                                            .border(dimens.standardBorder, colors.border, RoundedCornerShape(dimens.iconSquareRadius)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.Image,
+                                            contentDescription = null,
+                                            tint = if (isPdf) colors.dangerRed else colors.accent,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(14.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = att.name,
+                                            style = typography.bodyBold,
+                                            color = colors.text,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "${att.readableSize} · TAP TO VIEW",
+                                            style = typography.secondary,
+                                            color = colors.textMuted
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // -------------------------------------------------------------
-                // Attachments Section
-                // -------------------------------------------------------------
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Attachments (${expense.attachments.size})",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    if (isOpeningPdf) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Opening PDF with viewer...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    if (expense.attachments.isEmpty()) {
-                        Text(
-                            text = "No attachments for this expense.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            expense.attachments.forEach { att ->
-                                AttachmentDetailCard(
-                                    attachment = att,
-                                    onTap = {
-                                        if (att.isImage) {
-                                            selectedImageForViewer = att
-                                        } else if (att.isPdf) {
-                                            isOpeningPdf = true
-                                            coroutineScope.launch {
-                                                val res = AttachmentManager.openPdf(context, att)
-                                                isOpeningPdf = false
-                                                res.onFailure {
-                                                    Toast.makeText(
-                                                        context,
-                                                        it.localizedMessage ?: "Could not open PDF viewer",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onDelete = if (onRemoveAttachment != null) {
-                                        { attachmentToDelete = att }
-                                    } else null
-                                )
-                            }
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
-        },
-        confirmButton = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = { showDeleteConfirmation = true },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.testTag("delete_expense_button")
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Delete")
-                }
+        }
+    }
 
-                Row {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.testTag("close_expense_detail_button")
-                    ) {
-                        Text("Close")
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = onEdit,
-                        modifier = Modifier.testTag("edit_expense_button")
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Edit")
-                    }
-                }
-            }
-        },
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.testTag("expense_detail_dialog")
-    )
-
-    // Delete entire expense confirmation
+    // Confirmation dialog for Delete
     if (showDeleteConfirmation) {
-        AlertDialog(
+        PartnerBottomSheet(
             onDismissRequest = { showDeleteConfirmation = false },
-            title = {
+            testTag = "delete_confirmation_sheet"
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 Text(
-                    text = "Delete Expense?",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    text = "Delete this entry?",
+                    style = typography.screenTitle,
+                    color = colors.dangerRed
                 )
-            },
-            text = {
+
                 Text(
-                    text = "Are you sure you want to remove this payment of ${formatIndianCurrency(expense.amount)} to ${expense.supplierName}? This expense will be soft-deleted and removed from the active balance.",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "Are you sure you want to delete this payment of ${formatIndianCurrency(expense.amount)} for \"${expense.supplierName}\"? This action will be recorded in the audit trail.",
+                    style = typography.body,
+                    color = colors.textMuted
                 )
-            },
-            confirmButton = {
-                Button(
+
+                PartnerDangerButton(
+                    text = "CONFIRM DELETE",
                     onClick = {
                         showDeleteConfirmation = false
                         onDelete()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.testTag("confirm_delete_expense_button")
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    testTag = "confirm_delete_button"
+                )
+
+                PartnerOutlinedButton(
+                    text = "Cancel",
                     onClick = { showDeleteConfirmation = false },
-                    modifier = Modifier.testTag("cancel_delete_expense_button")
-                ) {
-                    Text("Cancel")
-                }
-            },
-            shape = RoundedCornerShape(14.dp)
-        )
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
     }
 
-    // Delete single attachment confirmation
-    if (attachmentToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { attachmentToDelete = null },
-            title = {
-                Text(
-                    text = "Remove Attachment?",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = "Remove '${attachmentToDelete!!.name}'? This will delete the file from Cloud Storage and log this action in the project's audit trail.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val att = attachmentToDelete!!
-                        attachmentToDelete = null
-                        onRemoveAttachment?.invoke(att)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.testTag("confirm_remove_attachment_button")
-                ) {
-                    Text("Remove")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { attachmentToDelete = null },
-                    modifier = Modifier.testTag("cancel_remove_attachment_button")
-                ) {
-                    Text("Cancel")
-                }
-            },
-            shape = RoundedCornerShape(14.dp)
-        )
-    }
-
-    // Full Screen Zoomable Image Viewer Dialog
     if (selectedImageForViewer != null) {
         FullScreenImageViewerDialog(
             attachment = selectedImageForViewer!!,
@@ -450,95 +434,27 @@ fun ExpenseDetailDialog(
 }
 
 @Composable
-private fun AttachmentDetailCard(
-    attachment: ExpenseAttachment,
-    onTap: () -> Unit,
-    onDelete: (() -> Unit)?
+private fun DetailItemRow(
+    label: String,
+    value: String
 ) {
-    val context = LocalContext.current
-    var downloadUrl by remember { mutableStateOf<String?>(null) }
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
 
-    LaunchedEffect(attachment.storagePath) {
-        if (attachment.isImage) {
-            val res = AttachmentManager.getDownloadUrl(attachment.storagePath)
-            res.onSuccess { downloadUrl = it }
-        }
-    }
-
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onTap)
-            .testTag("attachment_item_${attachment.name}")
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Thumbnail or Icon
-            if (attachment.isImage && !downloadUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(downloadUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = attachment.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                )
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (attachment.isPdf) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (attachment.isPdf) Icons.Default.PictureAsPdf else Icons.Default.Image,
-                            contentDescription = null,
-                            tint = if (attachment.isPdf) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = attachment.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-                Text(
-                    text = "${attachment.readableSize} · Tap to ${if (attachment.isImage) "view" else "open"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            if (onDelete != null) {
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .testTag("delete_attachment_button_${attachment.name}")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
+        Text(
+            text = label,
+            style = typography.smallLabel,
+            color = colors.textMuted
+        )
+        Text(
+            text = value,
+            style = typography.bodyBold,
+            color = colors.text
+        )
     }
 }

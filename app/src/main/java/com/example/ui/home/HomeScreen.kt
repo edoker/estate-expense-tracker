@@ -18,32 +18,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FolderOff
-import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -56,14 +40,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Invite
 import com.example.data.model.Project
+import com.example.data.service.PartnerLedgerMessagingService
 import com.example.data.util.formatDate
+import com.example.ui.components.PartnerCard
+import com.example.ui.components.PartnerIcon
+import com.example.ui.components.PartnerIconType
+import com.example.ui.components.PartnerOutlinedButton
+import com.example.ui.components.PartnerPrimaryButton
+import com.example.ui.theme.PartnerTheme
+import com.google.firebase.messaging.FirebaseMessaging
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,9 +73,13 @@ fun HomeScreen(
     onDeclineInvite: (Invite) -> Unit,
     onSignOutClick: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val dimens = PartnerTheme.dimens
+
     var menuExpanded by remember { mutableStateOf(false) }
-    var showNewProjectDialog by remember { mutableStateOf(false) }
+    var showNewProjectSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(operationMessage) {
@@ -94,15 +90,17 @@ fun HomeScreen(
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize().testTag("home_screen"),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("home_screen"),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = "PartnerLedger",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = typography.screenTitle,
+                        color = colors.text
                     )
                 },
                 actions = {
@@ -110,28 +108,31 @@ fun HomeScreen(
                         onClick = { menuExpanded = true },
                         modifier = Modifier.testTag("top_bar_menu_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Options Menu"
+                        PartnerIcon(
+                            type = PartnerIconType.MORE_VERT,
+                            tint = colors.text,
+                            size = 20.dp
                         )
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
-                        modifier = Modifier.testTag("home_dropdown_menu")
+                        modifier = Modifier
+                            .background(colors.surface)
+                            .testTag("home_dropdown_menu")
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Copy FCM Token") },
+                            text = { Text("Copy FCM Token", style = typography.body, color = colors.text) },
                             onClick = {
                                 menuExpanded = false
-                                val token = com.example.data.service.PartnerLedgerMessagingService.getCachedToken(context)
+                                val token = PartnerLedgerMessagingService.getCachedToken(context)
                                 if (!token.isNullOrBlank()) {
                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                                     clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("FCM Token", token))
                                     android.widget.Toast.makeText(context, "FCM Token copied to clipboard!", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
-                                    com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { fetchedToken ->
-                                        com.example.data.service.PartnerLedgerMessagingService.saveCachedToken(context, fetchedToken)
+                                    FirebaseMessaging.getInstance().token.addOnSuccessListener { fetchedToken ->
+                                        PartnerLedgerMessagingService.saveCachedToken(context, fetchedToken)
                                         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                                         clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("FCM Token", fetchedToken))
                                         android.widget.Toast.makeText(context, "FCM Token copied to clipboard!", android.widget.Toast.LENGTH_SHORT).show()
@@ -140,90 +141,58 @@ fun HomeScreen(
                                     }
                                 }
                             },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Mail,
-                                    contentDescription = "FCM Token"
-                                )
-                            },
                             modifier = Modifier.testTag("copy_fcm_token_button")
                         )
 
                         DropdownMenuItem(
-                            text = { Text("Sign out") },
+                            text = { Text("Sign out", style = typography.bodyBold, color = colors.dangerRed) },
                             onClick = {
                                 menuExpanded = false
                                 onSignOutClick()
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                    contentDescription = "Sign out"
-                                )
                             },
                             modifier = Modifier.testTag("sign_out_button")
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = colors.background,
+                    titleContentColor = colors.text
                 )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showNewProjectDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.testTag("new_project_fab")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "New Project"
-                )
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = colors.background
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(horizontal = dimens.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 // User Greeting Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("greeting_card"),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                PartnerCard(
+                    modifier = Modifier.testTag("greeting_card")
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp),
+                            .padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(dimens.iconSquareRadius))
+                                .background(colors.accentSoft),
                             contentAlignment = Alignment.Center
                         ) {
                             val initial = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "P"
                             Text(
                                 text = initial,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary
+                                style = typography.cardName,
+                                color = colors.accent
                             )
                         }
 
@@ -231,17 +200,16 @@ fun HomeScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Hello $displayName",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                text = "Hello, $displayName",
+                                style = typography.cardName,
+                                color = colors.text,
                                 modifier = Modifier.testTag("greeting_text")
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = email,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                style = typography.secondary,
+                                color = colors.textMuted
                             )
                         }
                     }
@@ -257,34 +225,15 @@ fun HomeScreen(
                             .testTag("invitations_section"),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Mail,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Project Invitations (${pendingInvites.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
+                        Text(
+                            text = "PROJECT INVITATIONS (${pendingInvites.size})",
+                            style = typography.smallLabel,
+                            color = colors.textMuted
+                        )
 
                         pendingInvites.forEach { invite ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("invite_card_${invite.id}"),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
-                                )
+                            PartnerCard(
+                                modifier = Modifier.testTag("invite_card_${invite.id}")
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -295,14 +244,13 @@ fun HomeScreen(
                                     Column {
                                         Text(
                                             text = invite.projectName,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                                            style = typography.cardName,
+                                            color = colors.text
                                         )
                                         Text(
                                             text = "Invited by ${invite.invitedByName} · ${invite.createdAt.formatDate()}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                                            style = typography.notes,
+                                            color = colors.textMuted
                                         )
                                     }
 
@@ -311,37 +259,30 @@ fun HomeScreen(
                                         horizontalArrangement = Arrangement.End,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        OutlinedButton(
+                                        PartnerOutlinedButton(
+                                            text = "Decline",
                                             onClick = { onDeclineInvite(invite) },
-                                            modifier = Modifier.testTag("decline_invite_button_${invite.id}"),
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Decline")
-                                        }
+                                            height = 42.dp,
+                                            testTag = "decline_invite_button_${invite.id}"
+                                        )
 
-                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
 
-                                        Button(
-                                            onClick = { onAcceptInvite(invite) },
-                                            modifier = Modifier.testTag("accept_invite_button_${invite.id}"),
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary
-                                            )
+                                        Box(
+                                            modifier = Modifier
+                                                .height(42.dp)
+                                                .clip(RoundedCornerShape(dimens.buttonRadius))
+                                                .background(colors.accentButtonFill)
+                                                .clickable { onAcceptInvite(invite) }
+                                                .padding(horizontal = 18.dp)
+                                                .testTag("accept_invite_button_${invite.id}"),
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
+                                            Text(
+                                                text = "ACCEPT",
+                                                style = typography.primaryButton.copy(fontSize = 13.sp),
+                                                color = colors.accentButtonText
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Accept")
                                         }
                                     }
                                 }
@@ -351,32 +292,44 @@ fun HomeScreen(
                 }
             }
 
-            // Projects Section Header
+            // Projects Header with ONE "+ New Project" button only
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Projects",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        text = "PROJECTS",
+                        style = typography.smallLabel,
+                        color = colors.textMuted
                     )
 
-                    Button(
-                        onClick = { showNewProjectDialog = true },
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.testTag("new_project_button")
+                    Box(
+                        modifier = Modifier
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(dimens.buttonRadius))
+                            .background(colors.accentButtonFill)
+                            .clickable { showNewProjectSheet = true }
+                            .padding(horizontal = 14.dp)
+                            .testTag("new_project_button"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("New Project")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PartnerIcon(
+                                type = PartnerIconType.PLUS,
+                                tint = colors.accentButtonText,
+                                size = 16.dp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "NEW PROJECT",
+                                style = typography.primaryButton.copy(fontSize = 12.sp),
+                                color = colors.accentButtonText
+                            )
+                        }
                     }
                 }
             }
@@ -384,34 +337,28 @@ fun HomeScreen(
             // Projects List or Empty State
             if (projects.isEmpty()) {
                 item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("empty_projects_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                    PartnerCard(
+                        modifier = Modifier.testTag("empty_projects_card")
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(36.dp),
+                                .padding(32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(dimens.iconSquareRadius))
+                                    .background(colors.accentSoft),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.FolderOff,
-                                    contentDescription = "No Projects",
-                                    modifier = Modifier.size(36.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    imageVector = Icons.Default.Business,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
 
@@ -419,33 +366,27 @@ fun HomeScreen(
 
                             Text(
                                 text = "No projects yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Center,
+                                style = typography.cardName,
+                                color = colors.text,
                                 modifier = Modifier.testTag("no_projects_text")
                             )
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "Create a project to start logging supplier payments with your partners, or wait for an invitation.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
+                                text = "Create a project to start logging supplier payments with partners, or wait for an invitation.",
+                                style = typography.body,
+                                color = colors.textMuted,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            Button(
-                                onClick = { showNewProjectDialog = true },
-                                modifier = Modifier.testTag("empty_state_create_button"),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Create First Project")
-                            }
+                            PartnerPrimaryButton(
+                                text = "+ CREATE FIRST PROJECT",
+                                onClick = { showNewProjectSheet = true },
+                                testTag = "empty_state_create_button"
+                            )
                         }
                     }
                 }
@@ -454,95 +395,78 @@ fun HomeScreen(
                     val isAdmin = project.isAdmin(currentUserId)
                     val memberCount = project.memberUids.size
 
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { onProjectClick(project.id) }
-                            .testTag("project_item_${project.id}"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    PartnerCard(
+                        onClick = { onProjectClick(project.id) },
+                        modifier = Modifier.testTag("project_item_${project.id}")
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(18.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(dimens.iconSquareRadius))
+                                    .background(colors.accentSoft),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Business,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(26.dp)
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = project.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style = typography.cardName,
+                                    color = colors.text
                                 )
 
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = if (isAdmin) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    // Admin/Partner role tag
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isAdmin) colors.accentSoft else colors.border)
+                                            .padding(horizontal = 7.dp, vertical = 2.dp)
                                     ) {
                                         Text(
-                                            text = if (isAdmin) "Admin" else "Member",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isAdmin) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.People,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "$memberCount partner${if (memberCount > 1) "s" else ""}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = if (isAdmin) "ADMIN" else "MEMBER",
+                                            style = typography.smallLabel.copy(fontSize = 10.sp),
+                                            color = if (isAdmin) colors.accent else colors.textMuted
                                         )
                                     }
 
                                     Text(
+                                        text = "$memberCount partner${if (memberCount > 1) "s" else ""}",
+                                        style = typography.secondary,
+                                        color = colors.textMuted
+                                    )
+
+                                    Text(
                                         text = "· ${project.createdAt.formatDate()}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        style = typography.secondary,
+                                        color = colors.textMuted
                                     )
                                 }
                             }
 
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "Open Project",
-                                tint = MaterialTheme.colorScheme.outline
+                            PartnerIcon(
+                                type = PartnerIconType.CHEVRON_RIGHT,
+                                tint = colors.textMuted,
+                                size = 20.dp
                             )
                         }
                     }
@@ -550,16 +474,16 @@ fun HomeScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(72.dp)) // padding for FAB
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 
-    if (showNewProjectDialog) {
-        NewProjectDialog(
-            onDismiss = { showNewProjectDialog = false },
+    if (showNewProjectSheet) {
+        NewProjectBottomSheet(
+            onDismiss = { showNewProjectSheet = false },
             onCreate = { projectName ->
-                showNewProjectDialog = false
+                showNewProjectSheet = false
                 onCreateProject(projectName)
             }
         )

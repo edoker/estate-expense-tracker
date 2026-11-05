@@ -11,6 +11,7 @@ data class User(
     val displayName: String = "",
     val email: String = "",
     val photoUrl: String? = null,
+    val isNameConfirmed: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val lastLoginAt: Timestamp? = null,
     val fcmTokens: List<String> = emptyList()

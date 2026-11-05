@@ -13,37 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,26 +32,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.TextButton
+import androidx.compose.ui.unit.sp
 import com.example.data.model.Audit
 import com.example.data.model.Expense
 import com.example.data.model.ExpenseAttachment
 import com.example.data.model.Invite
 import com.example.data.model.Project
-import com.example.data.model.ProjectMember
-import com.example.data.util.formatDate
+import com.example.ui.components.DangerousHoldButton
+import com.example.ui.components.PartnerBottomSheet
+import com.example.ui.components.PartnerIcon
+import com.example.ui.components.PartnerIconType
+import com.example.ui.components.PartnerInputField
+import com.example.ui.components.PartnerOutlinedButton
+import com.example.ui.components.PartnerSquareIconButton
+import com.example.ui.components.PartnerTabBar
+import com.example.ui.theme.PartnerTheme
 import com.google.firebase.Timestamp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,9 +100,13 @@ fun ProjectDetailScreen(
 ) {
     BackHandler(onBack = onNavigateBack)
 
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val dimens = PartnerTheme.dimens
+
     var showInviteDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
-    var showDeleteProjectDialog by remember { mutableStateOf(false) }
+    var showDeleteProjectSheet by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -140,20 +122,24 @@ fun ProjectDetailScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Project") },
+                    title = { Text("Project", style = typography.screenTitle, color = colors.text) },
                     navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
+                        PartnerSquareIconButton(
+                            iconType = PartnerIconType.BACK,
+                            onClick = onNavigateBack,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
                 )
-            }
+            },
+            containerColor = colors.background
         ) { padding ->
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = colors.accent)
             }
         }
         return
@@ -161,71 +147,92 @@ fun ProjectDetailScreen(
 
     val isAdmin = project.isAdmin(currentUserId)
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize().testTag("project_detail_screen"),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
+    var selectedExpenseForDetailId by remember { mutableStateOf<String?>(null) }
+    var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
+
+    val selectedExpense = remember(selectedExpenseForDetailId, expenses) {
+        if (selectedExpenseForDetailId == null) null
+        else expenses.find { it.id == selectedExpenseForDetailId }
+    }
+
+    if (selectedExpense != null) {
+        ExpenseDetailDialog(
+            expense = selectedExpense,
+            members = project.members,
+            onDismiss = { selectedExpenseForDetailId = null },
+            onEdit = {
+                val toEdit = selectedExpense
+                selectedExpenseForDetailId = null
+                expenseToEdit = toEdit
+            },
+            onDelete = {
+                selectedExpenseForDetailId = null
+                onDeleteExpense(selectedExpense)
+            },
+            onRemoveAttachment = { att ->
+                onRemoveAttachment(selectedExpense, att)
+            }
+        )
+    } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize().testTag("project_detail_screen"),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(modifier = Modifier.padding(start = 4.dp)) {
                         Text(
                             text = project.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            style = typography.screenTitle,
+                            color = colors.text,
                             maxLines = 1
                         )
                         Text(
-                            text = if (isAdmin) "Admin access" else "Partner access",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = if (isAdmin) "ADMIN ACCESS" else "PARTNER ACCESS",
+                            style = typography.smallLabel,
+                            color = colors.textMuted
                         )
                     }
                 },
                 navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.testTag("project_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Navigate Back"
+                    Box(modifier = Modifier.padding(start = 12.dp)) {
+                        PartnerSquareIconButton(
+                            iconType = PartnerIconType.BACK,
+                            onClick = onNavigateBack,
+                            modifier = Modifier.testTag("project_back_button")
                         )
                     }
                 },
                 actions = {
-                    IconButton(
+                    // Export Download Tray Icon
+                    PartnerSquareIconButton(
+                        iconType = PartnerIconType.EXPORT_TRAY,
                         onClick = { showExportDialog = true },
                         modifier = Modifier.testTag("export_report_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PictureAsPdf,
-                            contentDescription = "Export PDF Report",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    )
 
-                    Box {
-                        IconButton(
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // More Options Icon
+                    Box(modifier = Modifier.padding(end = 12.dp)) {
+                        PartnerSquareIconButton(
+                            iconType = PartnerIconType.MORE_VERT,
                             onClick = { showOverflowMenu = true },
                             modifier = Modifier.testTag("project_menu_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More Options"
-                            )
-                        }
+                        )
 
                         DropdownMenu(
                             expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false }
+                            onDismissRequest = { showOverflowMenu = false },
+                            modifier = Modifier.background(colors.surface)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Export PDF Report") },
+                                text = { Text("Export Report", style = typography.body, color = colors.text) },
                                 leadingIcon = {
-                                    Icon(
-                                        Icons.Default.PictureAsPdf,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
+                                    PartnerIcon(
+                                        type = PartnerIconType.EXPORT_TRAY,
+                                        tint = colors.accent,
+                                        size = 18.dp
                                     )
                                 },
                                 onClick = {
@@ -240,20 +247,20 @@ fun ProjectDetailScreen(
                                     text = {
                                         Text(
                                             text = "Delete Project",
-                                            color = MaterialTheme.colorScheme.error,
-                                            fontWeight = FontWeight.Bold
+                                            style = typography.bodyBold,
+                                            color = colors.dangerRed
                                         )
                                     },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
+                                        PartnerIcon(
+                                            type = PartnerIconType.AUDIT_DELETED,
+                                            tint = colors.dangerRed,
+                                            size = 18.dp
                                         )
                                     },
                                     onClick = {
                                         showOverflowMenu = false
-                                        showDeleteProjectDialog = true
+                                        showDeleteProjectSheet = true
                                     },
                                     modifier = Modifier.testTag("menu_delete_project")
                                 )
@@ -262,46 +269,23 @@ fun ProjectDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = colors.background,
+                    titleContentColor = colors.text
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = colors.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth().testTag("project_tabs")
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { onSelectTab(0) },
-                    text = { Text("Expenses") },
-                    icon = { Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.testTag("tab_expenses")
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { onSelectTab(1) },
-                    text = { Text("Audit Trail") },
-                    icon = { Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.testTag("tab_audit")
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { onSelectTab(2) },
-                    text = { Text("Members") },
-                    icon = { Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.testTag("tab_members")
-                )
-            }
+            // Tab bar with icons above labels
+            PartnerTabBar(
+                selectedTab = selectedTab,
+                onTabSelected = onSelectTab
+            )
 
             when (selectedTab) {
                 0 -> ExpensesTab(
@@ -314,7 +298,8 @@ fun ProjectDetailScreen(
                     onCreateExpense = onCreateExpense,
                     onUpdateExpense = onUpdateExpense,
                     onDeleteExpense = onDeleteExpense,
-                    onRemoveAttachment = onRemoveAttachment
+                    onRemoveAttachment = onRemoveAttachment,
+                    onExpenseClick = { selectedExpenseForDetailId = it.id }
                 )
                 1 -> AuditTrailTab(
                     auditTrail = auditTrail
@@ -332,6 +317,25 @@ fun ProjectDetailScreen(
             }
         }
     }
+}
+
+    if (expenseToEdit != null) {
+        ExpenseFormDialog(
+            projectId = project.id,
+            initialExpense = expenseToEdit,
+            targetExpenseId = expenseToEdit!!.id,
+            initialType = expenseToEdit!!.type,
+            members = project.members,
+            currentUserId = currentUserId,
+            currentUserName = currentUserName,
+            onDismiss = { expenseToEdit = null },
+            onSave = { supplier, phone, amount, date, paidBy, note, type, mode, attachments, _ ->
+                val old = expenseToEdit!!
+                expenseToEdit = null
+                onUpdateExpense(old, supplier, phone, amount, date, paidBy, note, type, mode, attachments)
+            }
+        )
+    }
 
     if (showInviteDialog) {
         InvitePartnerDialog(
@@ -344,45 +348,14 @@ fun ProjectDetailScreen(
         )
     }
 
-    if (showDeleteProjectDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteProjectDialog = false },
-            title = {
-                Text(
-                    text = "Delete Project?",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-            },
-            text = {
-                Text(
-                    text = "Are you sure you want to permanently delete \"${project.name}\"? All transactions, receipts, audit history, and partner invitations will be deleted for everyone. This action cannot be undone.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showDeleteProjectDialog = false
-                        onDeleteProject()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    ),
-                    modifier = Modifier.testTag("confirm_delete_project_button")
-                ) {
-                    Text("Delete Project")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDeleteProjectDialog = false },
-                    modifier = Modifier.testTag("cancel_delete_project_button")
-                ) {
-                    Text("Cancel")
-                }
+    // Danger Zone: Delete Project (Type project name + hold 3 sec)
+    if (showDeleteProjectSheet) {
+        DeleteProjectBottomSheet(
+            projectName = project.name,
+            onDismiss = { showDeleteProjectSheet = false },
+            onConfirmDelete = {
+                showDeleteProjectSheet = false
+                onDeleteProject()
             }
         )
     }
@@ -397,296 +370,71 @@ fun ProjectDetailScreen(
     }
 }
 
+/**
+ * Delete Project Bottom Sheet: Danger zone requiring typing exact name and holding for 3 seconds
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MembersTab(
+private fun DeleteProjectBottomSheet(
     projectName: String,
-    currentUserId: String,
-    isAdmin: Boolean,
-    members: Map<String, ProjectMember>,
-    pendingInvites: List<Invite>,
-    onOpenInviteDialog: () -> Unit,
-    onCancelInvite: (String) -> Unit,
-    onRemoveMember: (targetUid: String, memberName: String) -> Unit
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
 ) {
-    var memberToRemove by remember { mutableStateOf<Pair<String, ProjectMember>?>(null) }
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    var typedName by remember { mutableStateOf("") }
+    val isMatch = typedName.trim().equals(projectName.trim(), ignoreCase = false)
+
+    PartnerBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        testTag = "delete_project_sheet"
     ) {
-        // Members Header & Action
-        item {
-            Row(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Delete $projectName?",
+                style = typography.screenTitle,
+                color = colors.dangerRed
+            )
+
+            Text(
+                text = "All transactions, receipts, audit history, and partner invitations will be permanently deleted for all partners. This action cannot be undone.",
+                style = typography.body,
+                color = colors.textMuted
+            )
+
+            PartnerInputField(
+                value = typedName,
+                onValueChange = { typedName = it },
+                label = "TYPE $projectName TO CONFIRM",
+                placeholder = "Project name",
+                singleLine = true,
+                testTag = "delete_project_input"
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            DangerousHoldButton(
+                actionLabel = if (isMatch) "HOLD 3 SEC TO DELETE" else "TYPE NAME TO UNLOCK",
+                onHoldComplete = onConfirmDelete,
+                enabled = isMatch,
+                testTag = "confirm_delete_project_button"
+            )
+
+            PartnerOutlinedButton(
+                text = "Cancel",
+                onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Project Partners (${members.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = "Authorized Google accounts on this project",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // ONLY admin sees "Invite partner" button
-                if (isAdmin) {
-                    Button(
-                        onClick = onOpenInviteDialog,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.testTag("invite_partner_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Invite Partner")
-                    }
-                }
-            }
+                testTag = "cancel_delete_project_button"
+            )
         }
-
-        // Active Members List
-        items(members.toList(), key = { it.first }) { (uid, member) ->
-            val isCurrent = uid == currentUserId
-            val isMemberAdmin = member.role == "admin"
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("member_item_${uid}"),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isMemberAdmin) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val initial = member.name.firstOrNull()?.uppercaseChar()?.toString()
-                            ?: member.email.firstOrNull()?.uppercaseChar()?.toString() ?: "P"
-                        Text(
-                            text = initial,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isMemberAdmin) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = member.name.ifBlank { "Partner" },
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isCurrent) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "(You)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = member.email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isMemberAdmin) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = if (isMemberAdmin) "Admin" else "Member",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isMemberAdmin) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-
-                    // Admin can remove non-admin members
-                    if (isAdmin && !isMemberAdmin && !isCurrent) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        IconButton(
-                            onClick = { memberToRemove = Pair(uid, member) },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .testTag("remove_member_button_${uid}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DeleteOutline,
-                                contentDescription = "Remove Member",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Pending Invites Section
-        if (pendingInvites.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.HourglassTop,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Pending Invitations (${pendingInvites.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-            }
-
-            items(pendingInvites, key = { it.id }) { invite ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("project_pending_invite_${invite.id}"),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = invite.invitedEmail,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Invited by ${invite.invitedByName} · ${invite.createdAt.formatDate()}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // Admin can cancel a pending invite
-                        if (isAdmin) {
-                            OutlinedButton(
-                                onClick = { onCancelInvite(invite.id) },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.testTag("cancel_invite_button_${invite.id}")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DeleteOutline,
-                                    contentDescription = "Cancel Invite",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Cancel")
-                            }
-                        } else {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Text(
-                                    text = "Pending",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (memberToRemove != null) {
-        val target = memberToRemove!!
-        val displayName = target.second.name.ifBlank { target.second.email }
-        AlertDialog(
-            onDismissRequest = { memberToRemove = null },
-            title = {
-                Text(
-                    text = "Remove Member?",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-            },
-            text = {
-                Text(
-                    text = "Are you sure you want to remove \"$displayName\" from \"$projectName\"? They will immediately lose access to this project.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val uid = target.first
-                        memberToRemove = null
-                        onRemoveMember(uid, displayName)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    ),
-                    modifier = Modifier.testTag("confirm_remove_member_button")
-                ) {
-                    Text("Remove")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { memberToRemove = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }

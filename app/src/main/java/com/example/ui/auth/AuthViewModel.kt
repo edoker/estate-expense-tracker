@@ -213,6 +213,34 @@ class AuthViewModel(
         }
     }
 
+    fun updateDisplayName(newName: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        val currentAuth = _authState.value
+        if (currentAuth !is AuthState.Authenticated) {
+            onComplete?.invoke(false, "Not signed in")
+            return
+        }
+        val cleanName = newName.trim()
+        if (cleanName.isBlank()) {
+            onComplete?.invoke(false, "Name cannot be empty")
+            return
+        }
+
+        viewModelScope.launch {
+            val result = userRepository.updateDisplayName(currentAuth.user.uid, cleanName)
+            result.onSuccess {
+                val updatedUser = currentAuth.user.copy(
+                    displayName = cleanName,
+                    isNameConfirmed = true
+                )
+                _authState.value = AuthState.Authenticated(updatedUser)
+                onComplete?.invoke(true, null)
+            }.onFailure { error ->
+                Log.e("AuthViewModel", "Failed to update display name", error)
+                onComplete?.invoke(false, error.localizedMessage ?: "Failed to update name")
+            }
+        }
+    }
+
     fun dismissError() {
         if (_authState.value is AuthState.Unauthenticated) {
             _authState.value = AuthState.Unauthenticated(null)
