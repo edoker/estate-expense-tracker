@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Expense
@@ -506,7 +507,9 @@ fun ExpensesTab(
                                             Text(
                                                 text = actionLabel.uppercase(),
                                                 style = typography.smallLabel.copy(fontSize = 10.sp),
-                                                color = colors.textSecondary
+                                                color = colors.textSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
 
@@ -521,16 +524,33 @@ fun ExpensesTab(
                                             Text(
                                                 text = expense.paymentMode.ifBlank { "UPI" }.uppercase(),
                                                 style = typography.smallLabel.copy(fontSize = 10.sp),
-                                                color = colors.textMuted
+                                                color = colors.textMuted,
+                                                maxLines = 1
                                             )
                                         }
 
                                         if (expense.attachments.isNotEmpty()) {
-                                            Text(
-                                                text = "· ${expense.attachments.size} attachment${if (expense.attachments.size > 1) "s" else ""}",
-                                                style = typography.secondary,
-                                                color = colors.textMuted
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                                modifier = Modifier
+                                                    .padding(start = 2.dp)
+                                                    .testTag("expense_attachment_indicator_${expense.id}")
+                                            ) {
+                                                PartnerIcon(
+                                                    type = PartnerIconType.PAPERCLIP,
+                                                    tint = colors.textMuted,
+                                                    size = 13.dp
+                                                )
+                                                Text(
+                                                    text = "${expense.attachments.size}",
+                                                    style = typography.smallLabel.copy(
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    ),
+                                                    color = colors.textMuted
+                                                )
+                                            }
                                         }
                                     }
                                 }

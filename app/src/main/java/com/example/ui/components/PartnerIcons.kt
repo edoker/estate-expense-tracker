@@ -36,7 +36,8 @@ enum class PartnerIconType {
     CLOSE,
     CHEVRON_RIGHT,
     CHECK,
-    PLUS
+    PLUS,
+    PAPERCLIP
 }
 
 @Composable
@@ -52,7 +53,8 @@ fun PartnerIcon(
         PartnerIconType.AUDIT_EDITED, PartnerIconType.AUDIT_DELETED -> 2.6f
         PartnerIconType.TAB_EXPENSES, PartnerIconType.TAB_AUDIT, PartnerIconType.TAB_MEMBERS,
         PartnerIconType.MODE_UPI, PartnerIconType.MODE_CASH, PartnerIconType.MODE_CHEQUE,
-        PartnerIconType.MODE_NETBANKING, PartnerIconType.EXPORT_TRAY, PartnerIconType.PLUS -> 2.2f
+        PartnerIconType.MODE_NETBANKING, PartnerIconType.EXPORT_TRAY, PartnerIconType.PLUS,
+        PartnerIconType.PAPERCLIP -> 2.2f
     }
 ) {
     Canvas(modifier = modifier.size(size)) {
@@ -85,6 +87,7 @@ fun PartnerIcon(
             PartnerIconType.CHEVRON_RIGHT -> drawChevronRight(tint, stroke, scale)
             PartnerIconType.CHECK -> drawCheck(tint, stroke, scale)
             PartnerIconType.PLUS -> drawPlus(tint, stroke, scale)
+            PartnerIconType.PAPERCLIP -> drawPaperclip(tint, stroke, scale)
         }
     }
 }
@@ -490,4 +493,22 @@ fun GoogleOfficialLogo(
         }
         drawPath(redPath, red)
     }
+}
+
+// Paperclip attachment icon
+private fun DrawScope.drawPaperclip(tint: Color, stroke: Stroke, s: Float) {
+    val path = Path().apply {
+        moveTo(21.44f * s, 11.05f * s)
+        lineTo(12.25f * s, 20.24f * s)
+        cubicTo(9.9f * s, 22.58f * s, 6.1f * s, 22.58f * s, 3.76f * s, 20.24f * s)
+        cubicTo(1.41f * s, 17.89f * s, 1.41f * s, 14.1f * s, 3.76f * s, 11.75f * s)
+        lineTo(12.33f * s, 3.18f * s)
+        cubicTo(13.89f * s, 1.62f * s, 16.42f * s, 1.62f * s, 17.99f * s, 3.18f * s)
+        cubicTo(19.55f * s, 4.74f * s, 19.55f * s, 7.27f * s, 17.99f * s, 8.84f * s)
+        lineTo(9.4f * s, 17.41f * s)
+        cubicTo(8.62f * s, 18.2f * s, 7.35f * s, 18.2f * s, 6.57f * s, 17.41f * s)
+        cubicTo(5.79f * s, 16.63f * s, 5.79f * s, 15.36f * s, 6.57f * s, 14.58f * s)
+        lineTo(15.06f * s, 6.1f * s)
+    }
+    drawPath(path, tint, style = stroke)
 }
