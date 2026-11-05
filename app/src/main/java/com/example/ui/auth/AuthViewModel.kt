@@ -213,7 +213,11 @@ class AuthViewModel(
         }
     }
 
-    fun updateDisplayName(newName: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
+    fun updateDisplayName(
+        newName: String,
+        projectRepository: com.example.data.repository.ProjectRepository? = null,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
         val currentAuth = _authState.value
         if (currentAuth !is AuthState.Authenticated) {
             onComplete?.invoke(false, "Not signed in")
@@ -233,6 +237,14 @@ class AuthViewModel(
                     isNameConfirmed = true
                 )
                 _authState.value = AuthState.Authenticated(updatedUser)
+
+                // Sync new name across all projects in Firestore
+                try {
+                    projectRepository?.updateMemberNameAcrossProjects(currentAuth.user.uid, cleanName)
+                } catch (e: Exception) {
+                    Log.w("AuthViewModel", "Failed to sync name to projects: ${e.message}")
+                }
+
                 onComplete?.invoke(true, null)
             }.onFailure { error ->
                 Log.e("AuthViewModel", "Failed to update display name", error)

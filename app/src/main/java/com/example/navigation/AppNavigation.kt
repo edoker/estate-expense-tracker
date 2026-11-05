@@ -119,6 +119,15 @@ fun AppNavigation(
                         onDeclineInvite = { invite ->
                             projectsViewModel.declineInvite(invite)
                         },
+                        onUpdateDisplayName = { newName ->
+                            authViewModel.updateDisplayName(newName, projectRepository) { success, errorMsg ->
+                                if (success) {
+                                    projectsViewModel.postOperationMessage("Name updated to '$newName'")
+                                } else if (!errorMsg.isNullOrBlank()) {
+                                    projectsViewModel.postOperationMessage(errorMsg)
+                                }
+                            }
+                        },
                         onSignOutClick = {
                             authViewModel.signOut(context, credentialManager)
                         }
@@ -146,6 +155,10 @@ fun AppNavigation(
                             }
                         }
                     )
+
+                    LaunchedEffect(state.user) {
+                        detailViewModel.updateCurrentUser(state.user)
+                    }
 
                     val project by detailViewModel.project.collectAsStateWithLifecycle()
                     val expenses by detailViewModel.expenses.collectAsStateWithLifecycle()

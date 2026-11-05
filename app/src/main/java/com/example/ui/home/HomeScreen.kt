@@ -1,6 +1,7 @@
 package com.example.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +72,7 @@ fun HomeScreen(
     onCreateProject: (String) -> Unit,
     onAcceptInvite: (Invite) -> Unit,
     onDeclineInvite: (Invite) -> Unit,
+    onUpdateDisplayName: (String) -> Unit = {},
     onSignOutClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -80,6 +82,7 @@ fun HomeScreen(
 
     var menuExpanded by remember { mutableStateOf(false) }
     var showNewProjectSheet by remember { mutableStateOf(false) }
+    var showEditNameSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(operationMessage) {
@@ -171,8 +174,9 @@ fun HomeScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.height(2.dp))
-                // User Greeting Card
+                // User Greeting Card (Tap to edit name)
                 PartnerCard(
+                    onClick = { showEditNameSheet = true },
                     modifier = Modifier.testTag("greeting_card")
                 ) {
                     Row(
@@ -211,6 +215,34 @@ fun HomeScreen(
                                 style = typography.secondary,
                                 color = colors.textMuted
                             )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Edit affordance chip
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.accentSoft)
+                                .border(dimens.standardBorder, colors.accent.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 9.dp, vertical = 5.dp)
+                                .testTag("edit_name_chip")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                PartnerIcon(
+                                    type = PartnerIconType.AUDIT_EDITED,
+                                    tint = colors.accent,
+                                    size = 13.dp
+                                )
+                                Text(
+                                    text = "EDIT",
+                                    style = typography.smallLabel.copy(fontSize = 10.sp),
+                                    color = colors.accent
+                                )
+                            }
                         }
                     }
                 }
@@ -485,6 +517,17 @@ fun HomeScreen(
             onCreate = { projectName ->
                 showNewProjectSheet = false
                 onCreateProject(projectName)
+            }
+        )
+    }
+
+    if (showEditNameSheet) {
+        EditNameBottomSheet(
+            currentName = displayName,
+            onDismiss = { showEditNameSheet = false },
+            onSave = { newName ->
+                showEditNameSheet = false
+                onUpdateDisplayName(newName)
             }
         )
     }

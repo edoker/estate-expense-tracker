@@ -346,4 +346,28 @@ class ProjectRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun updateMemberNameAcrossProjects(uid: String, newName: String): Result<Unit> {
+        val cleanName = newName.trim()
+        if (cleanName.isBlank()) return Result.success(Unit)
+
+        return try {
+            val snapshot = db.collection("projects")
+                .whereArrayContains("memberUids", uid)
+                .get()
+                .await()
+
+            for (doc in snapshot.documents) {
+                try {
+                    doc.reference.update("members.$uid.name", cleanName).await()
+                } catch (e: Exception) {
+                    // Continue with other projects even if one fails
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "projects")
+            Result.failure(e)
+        }
+    }
 }

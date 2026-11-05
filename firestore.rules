@@ -37,17 +37,27 @@ service cloud.firestore {
              data.createdAt is timestamp;
     }
 
+    function isUpdatingOwnMemberName() {
+      let diff = request.resource.data.members.diff(resource.data.members);
+      let selfUid = request.auth.uid;
+      return request.resource.data.memberUids == resource.data.memberUids &&
+             diff.affectedKeys().hasOnly([selfUid]) &&
+             request.resource.data.members[selfUid].role == resource.data.members[selfUid].role &&
+             request.resource.data.members[selfUid].email == resource.data.members[selfUid].email &&
+             request.resource.data.members[selfUid].name is string &&
+             request.resource.data.members[selfUid].name.size() > 0;
+    }
+
     function isMemberUpdatingProject() {
       let isMember = request.auth.uid in resource.data.memberUids;
       let isAdmin = request.auth.uid == resource.data.adminUid;
       let adminUidUnchanged = request.resource.data.adminUid == resource.data.adminUid;
 
       // Admin can update project details and manage members/roles (adminUid stays unchanged).
-      // Non-admin existing member can update project details (e.g. name), but cannot modify members or memberUids.
-      let membersRoleCheck = isAdmin || (
-        request.resource.data.memberUids == resource.data.memberUids &&
-        request.resource.data.members == resource.data.members
-      );
+      // Non-admin existing member can update project details (e.g. name), or update their own display name in members map.
+      let membersRoleCheck = isAdmin ||
+        (request.resource.data.memberUids == resource.data.memberUids && request.resource.data.members == resource.data.members) ||
+        isUpdatingOwnMemberName();
 
       return isAuthenticated() && isMember && adminUidUnchanged && membersRoleCheck && isValidProject(request.resource.data);
     }

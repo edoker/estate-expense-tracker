@@ -24,8 +24,15 @@ class ProjectDetailViewModel(
     private val projectRepository: ProjectRepository,
     private val expenseRepository: ExpenseRepository,
     private val auditRepository: AuditRepository,
-    private val currentUser: User
+    initialUser: User
 ) : ViewModel() {
+
+    var currentUser: User = initialUser
+        private set
+
+    fun updateCurrentUser(user: User) {
+        currentUser = user
+    }
 
     fun generateExpenseId(): String {
         return expenseRepository.generateExpenseId(projectId)
@@ -123,7 +130,14 @@ class ProjectDetailViewModel(
         expenseId: String? = null,
         onSuccess: () -> Unit
     ) {
-        val members = project.value?.members ?: emptyMap()
+        val rawMembers = project.value?.members ?: emptyMap()
+        val members = if (currentUser.displayName.isNotBlank()) {
+            rawMembers.mapValues { (uid, member) ->
+                if (uid == currentUser.uid) member.copy(name = currentUser.displayName) else member
+            }
+        } else {
+            rawMembers
+        }
         val actorName = currentUser.displayName.ifBlank { "Partner" }
 
         _isProcessing.value = true
@@ -167,7 +181,14 @@ class ProjectDetailViewModel(
         attachments: List<ExpenseAttachment> = oldExpense.attachments,
         onSuccess: () -> Unit
     ) {
-        val members = project.value?.members ?: emptyMap()
+        val rawMembers = project.value?.members ?: emptyMap()
+        val members = if (currentUser.displayName.isNotBlank()) {
+            rawMembers.mapValues { (uid, member) ->
+                if (uid == currentUser.uid) member.copy(name = currentUser.displayName) else member
+            }
+        } else {
+            rawMembers
+        }
         val actorName = currentUser.displayName.ifBlank { "Partner" }
 
         _isProcessing.value = true

@@ -147,6 +147,21 @@ fun ProjectDetailScreen(
 
     val isAdmin = project.isAdmin(currentUserId)
 
+    // Ensure the current user's latest display name is always reflected in the members map
+    val resolvedMembers = remember(project.members, currentUserId, currentUserName) {
+        if (currentUserId.isNotBlank() && currentUserName.isNotBlank()) {
+            project.members.mapValues { (uid, member) ->
+                if (uid == currentUserId) {
+                    member.copy(name = currentUserName)
+                } else {
+                    member
+                }
+            }
+        } else {
+            project.members
+        }
+    }
+
     var selectedExpenseForDetailId by remember { mutableStateOf<String?>(null) }
     var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
 
@@ -158,7 +173,7 @@ fun ProjectDetailScreen(
     if (selectedExpense != null) {
         ExpenseDetailDialog(
             expense = selectedExpense,
-            members = project.members,
+            members = resolvedMembers,
             onDismiss = { selectedExpenseForDetailId = null },
             onEdit = {
                 val toEdit = selectedExpense
@@ -291,7 +306,7 @@ fun ProjectDetailScreen(
                 0 -> ExpensesTab(
                     projectId = project.id,
                     expenses = expenses,
-                    members = project.members,
+                    members = resolvedMembers,
                     currentUserId = currentUserId,
                     currentUserName = currentUserName,
                     onGenerateExpenseId = onGenerateExpenseId,
@@ -308,7 +323,7 @@ fun ProjectDetailScreen(
                     projectName = project.name,
                     currentUserId = currentUserId,
                     isAdmin = isAdmin,
-                    members = project.members,
+                    members = resolvedMembers,
                     pendingInvites = pendingInvites,
                     onOpenInviteDialog = { showInviteDialog = true },
                     onCancelInvite = onCancelInvite,
@@ -325,7 +340,7 @@ fun ProjectDetailScreen(
             initialExpense = expenseToEdit,
             targetExpenseId = expenseToEdit!!.id,
             initialType = expenseToEdit!!.type,
-            members = project.members,
+            members = resolvedMembers,
             currentUserId = currentUserId,
             currentUserName = currentUserName,
             onDismiss = { expenseToEdit = null },
@@ -339,7 +354,7 @@ fun ProjectDetailScreen(
 
     if (showInviteDialog) {
         InvitePartnerDialog(
-            currentMembers = project.members,
+            currentMembers = resolvedMembers,
             onDismiss = { showInviteDialog = false },
             onInvite = { email ->
                 showInviteDialog = false
@@ -364,7 +379,7 @@ fun ProjectDetailScreen(
         ExportReportDialog(
             projectName = project.name,
             transactions = expenses,
-            members = project.members,
+            members = resolvedMembers,
             onDismiss = { showExportDialog = false }
         )
     }

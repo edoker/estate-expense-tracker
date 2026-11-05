@@ -92,4 +92,8 @@ class ProjectsViewModel(
     fun clearOperationMessage() {
         _operationMessage.value = null
     }
+
+    fun postOperationMessage(message: String) {
+        _operationMessage.value = message
+    }
 }
