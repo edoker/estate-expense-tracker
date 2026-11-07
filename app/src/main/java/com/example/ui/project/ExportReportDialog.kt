@@ -44,6 +44,7 @@ import com.example.data.util.formatIndianCurrency
 import com.example.ui.components.PartnerBottomSheet
 import com.example.ui.components.PartnerCard
 import com.example.ui.components.PartnerChip
+import com.example.ui.components.PartnerChipVariant
 import com.example.ui.components.PartnerPrimaryButton
 import com.example.ui.theme.PartnerTheme
 import com.google.firebase.Timestamp
@@ -328,17 +329,23 @@ fun ExportReportDialog(
                     PartnerChip(
                         label = "All",
                         selected = selectedTypeFilter == ExportTypeFilter.ALL,
-                        onClick = { selectedTypeFilter = ExportTypeFilter.ALL }
+                        onClick = { selectedTypeFilter = ExportTypeFilter.ALL },
+                        variant = PartnerChipVariant.DEFAULT,
+                        testTag = "export_filter_all"
                     )
                     PartnerChip(
                         label = "Gave",
                         selected = selectedTypeFilter == ExportTypeFilter.YOU_GAVE,
-                        onClick = { selectedTypeFilter = ExportTypeFilter.YOU_GAVE }
+                        onClick = { selectedTypeFilter = ExportTypeFilter.YOU_GAVE },
+                        variant = PartnerChipVariant.GAVE,
+                        testTag = "export_filter_gave"
                     )
                     PartnerChip(
                         label = "Got",
                         selected = selectedTypeFilter == ExportTypeFilter.YOU_GOT,
-                        onClick = { selectedTypeFilter = ExportTypeFilter.YOU_GOT }
+                        onClick = { selectedTypeFilter = ExportTypeFilter.YOU_GOT },
+                        variant = PartnerChipVariant.GOT,
+                        testTag = "export_filter_got"
                     )
 
                     // Member selector chip
@@ -351,7 +358,9 @@ fun ExportReportDialog(
                         PartnerChip(
                             label = memberLabel,
                             selected = selectedMemberUid != null,
-                            onClick = { memberFilterMenuExpanded = true }
+                            onClick = { memberFilterMenuExpanded = true },
+                            variant = PartnerChipVariant.DEFAULT,
+                            testTag = "export_filter_member"
                         )
 
                         DropdownMenu(
