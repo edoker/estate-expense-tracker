@@ -402,7 +402,7 @@ fun ExportReportDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("TOTAL GIVEN", style = typography.smallLabel, color = colors.textMuted)
-                        Text(formatIndianCurrency(totalGiven), style = typography.bodyBold, color = colors.dangerRed)
+                        Text(formatIndianCurrency(totalGiven), style = typography.bodyBold, color = colors.gaveRed)
                     }
                     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
                     Row(
@@ -410,7 +410,7 @@ fun ExportReportDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("TOTAL RECEIVED", style = typography.smallLabel, color = colors.textMuted)
-                        Text(formatIndianCurrency(totalReceived), style = typography.bodyBold, color = colors.accent)
+                        Text(formatIndianCurrency(totalReceived), style = typography.bodyBold, color = colors.gotGreen)
                     }
                     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
                     Row(
@@ -418,8 +418,16 @@ fun ExportReportDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("NET BALANCE", style = typography.smallLabel, color = colors.textMuted)
-                        val netColor = if (netBalance >= 0) colors.accent else colors.dangerRed
-                        val prefix = if (netBalance >= 0) "+ " else "− "
+                        val netColor = when {
+                            netBalance > 0 -> colors.gotGreen
+                            netBalance < 0 -> colors.gaveRed
+                            else -> colors.text
+                        }
+                        val prefix = when {
+                            netBalance > 0 -> "+ "
+                            netBalance < 0 -> "− "
+                            else -> ""
+                        }
                         Text("$prefix${formatIndianCurrency(kotlin.math.abs(netBalance))}", style = typography.bodyBold, color = netColor)
                     }
                 }

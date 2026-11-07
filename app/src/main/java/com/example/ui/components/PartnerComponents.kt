@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.graphics.BlurMaskFilter
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -40,9 +42,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +70,8 @@ fun PartnerPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    containerColor: Color = PartnerTheme.colors.accentButtonFill,
+    contentColor: Color = PartnerTheme.colors.accentButtonText,
     testTag: String = "primary_button"
 ) {
     val colors = PartnerTheme.colors
@@ -74,7 +83,7 @@ fun PartnerPrimaryButton(
             .fillMaxWidth()
             .height(dimens.primaryButtonHeight)
             .clip(RoundedCornerShape(dimens.buttonRadius))
-            .background(if (enabled) colors.accentButtonFill else colors.border)
+            .background(if (enabled) containerColor else colors.border)
             .clickable(enabled = enabled, onClick = onClick)
             .testTag(testTag),
         contentAlignment = Alignment.Center
@@ -82,7 +91,7 @@ fun PartnerPrimaryButton(
         Text(
             text = text.uppercase(),
             style = typography.primaryButton,
-            color = if (enabled) colors.accentButtonText else colors.textMuted,
+            color = if (enabled) contentColor else colors.textMuted,
             textAlign = TextAlign.Center
         )
     }
@@ -224,6 +233,12 @@ fun PartnerCard(
     }
 }
 
+enum class PartnerChipVariant {
+    DEFAULT, // Neutral blue accent when selected (e.g. All, Member)
+    GAVE,    // Red border, text, red-soft fill + soft red glow when selected
+    GOT      // Green border, text, green-soft fill + soft green glow when selected
+}
+
 /**
  * 44dp tall filter chip: radius 10dp, 1.5dp border, 13sp/600 font
  */
@@ -233,6 +248,7 @@ fun PartnerChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    variant: PartnerChipVariant = PartnerChipVariant.DEFAULT,
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
     testTag: String = "partner_chip"
@@ -241,13 +257,75 @@ fun PartnerChip(
     val typography = PartnerTheme.typography
     val dimens = PartnerTheme.dimens
 
-    val bg = if (selected) colors.accentSoft else colors.surface
-    val borderCol = if (selected) colors.accent else colors.border
-    val textCol = if (selected) colors.accent else colors.text
+    // Unselected chips (All, Gave, Got): neutral border and neutral text, NO color and NO glow
+    val bg = if (selected) {
+        when (variant) {
+            PartnerChipVariant.DEFAULT -> colors.accentSoft
+            PartnerChipVariant.GAVE -> colors.gaveSoft
+            PartnerChipVariant.GOT -> colors.gotSoft
+        }
+    } else {
+        colors.surface
+    }
+
+    val borderCol = if (selected) {
+        when (variant) {
+            PartnerChipVariant.DEFAULT -> colors.accent
+            PartnerChipVariant.GAVE -> colors.gaveRed
+            PartnerChipVariant.GOT -> colors.gotGreen
+        }
+    } else {
+        colors.border
+    }
+
+    val textCol = if (selected) {
+        when (variant) {
+            PartnerChipVariant.DEFAULT -> colors.accent
+            PartnerChipVariant.GAVE -> colors.gaveRed
+            PartnerChipVariant.GOT -> colors.gotGreen
+        }
+    } else {
+        colors.text
+    }
+
+    // Glow appears ONLY on selected Gave/Got chip, animated over 150ms
+    val targetGlowColor = if (selected && (variant == PartnerChipVariant.GAVE || variant == PartnerChipVariant.GOT)) {
+        val baseColor = if (variant == PartnerChipVariant.GAVE) colors.gaveRed else colors.gotGreen
+        val opacity = if (colors.isDark) 0.45f else 0.30f
+        baseColor.copy(alpha = opacity)
+    } else {
+        Color.Transparent
+    }
+
+    val animatedGlowColor by animateColorAsState(
+        targetValue = targetGlowColor,
+        animationSpec = tween(durationMillis = 150),
+        label = "chip_glow"
+    )
+
+    val blurRadius = if (colors.isDark) 14.dp else 10.dp
+    val blurRadiusPx = with(LocalDensity.current) { blurRadius.toPx() }
+    val shapeRadiusPx = with(LocalDensity.current) { dimens.chipRadius.toPx() }
 
     Box(
         modifier = modifier
             .height(dimens.chipHeight)
+            .drawBehind {
+                if (animatedGlowColor.alpha > 0.01f) {
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint().apply {
+                            isAntiAlias = true
+                            color = animatedGlowColor.toArgb()
+                            maskFilter = BlurMaskFilter(blurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawRoundRect(
+                            0f, 0f, size.width, size.height,
+                            shapeRadiusPx, shapeRadiusPx,
+                            paint
+                        )
+                    }
+                }
+            }
             .clip(RoundedCornerShape(dimens.chipRadius))
             .background(bg)
             .border(dimens.standardBorder, borderCol, RoundedCornerShape(dimens.chipRadius))
@@ -390,7 +468,7 @@ fun PartnerAmountText(
     val colors = PartnerTheme.colors
     val formatted = formatIndianCurrency(amount)
     val prefix = if (isIncome) "+ " else "− "
-    val color = if (isIncome) colors.accent else colors.dangerRed
+    val color = if (isIncome) colors.gotGreen else colors.gaveRed
 
     Text(
         text = "$prefix$formatted",
@@ -413,6 +491,8 @@ fun PartnerInputField(
     singleLine: Boolean = true,
     isError: Boolean = false,
     errorMessage: String? = null,
+    customBorderColor: Color? = null,
+    customTextColor: Color? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     trailingContent: (@Composable () -> Unit)? = null,
@@ -430,6 +510,10 @@ fun PartnerInputField(
             modifier = Modifier.padding(bottom = 6.dp, start = 2.dp)
         )
 
+        val borderColor = if (isError) colors.dangerRed else (customBorderColor ?: colors.border)
+        val textColor = customTextColor ?: colors.text
+        val cursorColor = customTextColor ?: colors.accent
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -437,7 +521,7 @@ fun PartnerInputField(
                 .background(colors.surface)
                 .border(
                     width = dimens.standardBorder,
-                    color = if (isError) colors.dangerRed else colors.border,
+                    color = borderColor,
                     shape = RoundedCornerShape(dimens.buttonRadius)
                 )
                 .padding(horizontal = 14.dp, vertical = 14.dp)
@@ -459,8 +543,8 @@ fun PartnerInputField(
                         value = value,
                         onValueChange = onValueChange,
                         singleLine = singleLine,
-                        textStyle = typography.bodyBold.copy(color = colors.text),
-                        cursorBrush = SolidColor(colors.accent),
+                        textStyle = typography.bodyBold.copy(color = textColor),
+                        cursorBrush = SolidColor(cursorColor),
                         keyboardOptions = keyboardOptions,
                         keyboardActions = keyboardActions,
                         modifier = Modifier.fillMaxWidth()

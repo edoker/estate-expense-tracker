@@ -293,10 +293,10 @@ fun ExpenseFormDialog(
                         .weight(1f)
                         .height(48.dp)
                         .clip(RoundedCornerShape(dimens.buttonRadius))
-                        .background(if (gaveSelected) colors.redSoft else colors.surface)
+                        .background(if (gaveSelected) colors.gaveSoft else colors.surface)
                         .border(
                             width = if (gaveSelected) dimens.emphasizedBorder else dimens.standardBorder,
-                            color = if (gaveSelected) colors.dangerRed else colors.border,
+                            color = if (gaveSelected) colors.gaveRed else colors.border,
                             shape = RoundedCornerShape(dimens.buttonRadius)
                         )
                         .clickable { type = "GAVE" }
@@ -306,14 +306,14 @@ fun ExpenseFormDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PartnerIcon(
                             type = PartnerIconType.ARROW_OUT,
-                            tint = if (gaveSelected) colors.dangerRed else colors.textMuted,
+                            tint = if (gaveSelected) colors.gaveRed else colors.textMuted,
                             size = 18.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "YOU GAVE",
                             style = typography.primaryButton.copy(fontSize = 13.sp),
-                            color = if (gaveSelected) colors.dangerRed else colors.textMuted
+                            color = if (gaveSelected) colors.gaveRed else colors.textMuted
                         )
                     }
                 }
@@ -325,10 +325,10 @@ fun ExpenseFormDialog(
                         .weight(1f)
                         .height(48.dp)
                         .clip(RoundedCornerShape(dimens.buttonRadius))
-                        .background(if (gotSelected) colors.accentSoft else colors.surface)
+                        .background(if (gotSelected) colors.gotSoft else colors.surface)
                         .border(
                             width = if (gotSelected) dimens.emphasizedBorder else dimens.standardBorder,
-                            color = if (gotSelected) colors.accent else colors.border,
+                            color = if (gotSelected) colors.gotGreen else colors.border,
                             shape = RoundedCornerShape(dimens.buttonRadius)
                         )
                         .clickable { type = "GOT" }
@@ -338,14 +338,14 @@ fun ExpenseFormDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PartnerIcon(
                             type = PartnerIconType.ARROW_IN,
-                            tint = if (gotSelected) colors.accent else colors.textMuted,
+                            tint = if (gotSelected) colors.gotGreen else colors.textMuted,
                             size = 18.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "YOU GOT",
                             style = typography.primaryButton.copy(fontSize = 13.sp),
-                            color = if (gotSelected) colors.accent else colors.textMuted
+                            color = if (gotSelected) colors.gotGreen else colors.textMuted
                         )
                     }
                 }
@@ -435,6 +435,7 @@ fun ExpenseFormDialog(
             }
 
             // -------------------------------------------------------------
+            // -------------------------------------------------------------
             // Large Amount Field in Accent Color
             // -------------------------------------------------------------
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -445,7 +446,8 @@ fun ExpenseFormDialog(
                     modifier = Modifier.padding(bottom = 6.dp, start = 2.dp)
                 )
 
-                val amountColor = if (isGave) colors.dangerRed else colors.accent
+                val amountColor = if (isGave) colors.gaveRed else colors.gotGreen
+                val amountBorderColor = if (amountError) colors.dangerRed else (if (isGave) colors.gaveRed else colors.gotGreen)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -453,7 +455,7 @@ fun ExpenseFormDialog(
                         .background(colors.surface)
                         .border(
                             width = dimens.standardBorder,
-                            color = if (amountError) colors.dangerRed else colors.border,
+                            color = amountBorderColor,
                             shape = RoundedCornerShape(dimens.buttonRadius)
                         )
                         .padding(horizontal = 14.dp, vertical = 12.dp)
@@ -610,6 +612,7 @@ fun ExpenseFormDialog(
                             mode = modes[0].first,
                             iconType = modes[0].second,
                             isSelected = paymentMode == modes[0].first,
+                            isGave = isGave,
                             onClick = { paymentMode = modes[0].first },
                             modifier = Modifier.weight(1f)
                         )
@@ -617,6 +620,7 @@ fun ExpenseFormDialog(
                             mode = modes[1].first,
                             iconType = modes[1].second,
                             isSelected = paymentMode == modes[1].first,
+                            isGave = isGave,
                             onClick = { paymentMode = modes[1].first },
                             modifier = Modifier.weight(1f)
                         )
@@ -629,6 +633,7 @@ fun ExpenseFormDialog(
                             mode = modes[2].first,
                             iconType = modes[2].second,
                             isSelected = paymentMode == modes[2].first,
+                            isGave = isGave,
                             onClick = { paymentMode = modes[2].first },
                             modifier = Modifier.weight(1f)
                         )
@@ -636,6 +641,7 @@ fun ExpenseFormDialog(
                             mode = modes[3].first,
                             iconType = modes[3].second,
                             isSelected = paymentMode == modes[3].first,
+                            isGave = isGave,
                             onClick = { paymentMode = modes[3].first },
                             modifier = Modifier.weight(1f)
                         )
@@ -726,14 +732,14 @@ fun ExpenseFormDialog(
                                     Icon(
                                         imageVector = if (att.isPdf) Icons.Default.PictureAsPdf else Icons.Default.Image,
                                         contentDescription = null,
-                                        tint = if (att.isPdf) colors.dangerRed else colors.accent,
+                                        tint = colors.accent,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = att.name,
                                         style = typography.notes,
-                                        color = if (att.isPdf) colors.text else colors.accent,
+                                        color = colors.text,
                                         maxLines = 1
                                     )
                                 }
@@ -766,10 +772,16 @@ fun ExpenseFormDialog(
             Spacer(modifier = Modifier.height(4.dp))
 
             // -------------------------------------------------------------
-            // Big SAVE ENTRY Button
+            // Big SAVE ENTRY Button (direction aware)
             // -------------------------------------------------------------
+            val saveButtonText = if (isGave) "SAVE · YOU GAVE" else "SAVE · YOU GOT"
+            val saveButtonContainerColor = if (isGave) colors.gaveButtonFill else colors.gotButtonFill
+            val saveButtonContentColor = if (isGave) colors.gaveButtonText else colors.gotButtonText
+
             PartnerPrimaryButton(
-                text = "SAVE ENTRY",
+                text = saveButtonText,
+                containerColor = saveButtonContainerColor,
+                contentColor = saveButtonContentColor,
                 onClick = {
                     val parsedAmount = amountInput.toDoubleOrNull()
                     var valid = true
@@ -836,6 +848,7 @@ private fun PaymentModeTile(
     mode: String,
     iconType: PartnerIconType,
     isSelected: Boolean,
+    isGave: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -843,10 +856,26 @@ private fun PaymentModeTile(
     val typography = PartnerTheme.typography
     val dimens = PartnerTheme.dimens
 
-    val bg = if (isSelected) colors.accentSoft else colors.surface
-    val borderCol = if (isSelected) colors.accent else colors.border
-    val tint = if (isSelected) colors.accent else colors.textMuted
-    val textCol = if (isSelected) colors.accent else colors.text
+    val bg = if (isSelected) {
+        if (isGave) colors.gaveSoft else colors.gotSoft
+    } else {
+        colors.surface
+    }
+    val borderCol = if (isSelected) {
+        if (isGave) colors.gaveRed else colors.gotGreen
+    } else {
+        colors.border
+    }
+    val tint = if (isSelected) {
+        if (isGave) colors.gaveRed else colors.gotGreen
+    } else {
+        colors.textMuted
+    }
+    val textCol = if (isSelected) {
+        if (isGave) colors.gaveRed else colors.gotGreen
+    } else {
+        colors.text
+    }
 
     Box(
         modifier = modifier

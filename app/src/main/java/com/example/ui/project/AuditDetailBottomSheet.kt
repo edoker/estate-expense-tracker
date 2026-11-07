@@ -77,7 +77,7 @@ fun AuditDetailBottomSheet(
 
     val rawType = snapshot["type"]?.toString()?.uppercase() ?: "GAVE"
     val isGave = rawType == "GAVE"
-    val typeColor = if (isGave) colors.dangerRed else colors.accent
+    val typeColor = if (isGave) colors.gaveRed else colors.gotGreen
 
     val attachmentsValue = remember(snapshot) {
         val raw = snapshot["attachments"]
@@ -189,7 +189,7 @@ fun AuditDetailBottomSheet(
                     AuditItemRow("AMOUNT", amountFormatted, valueColor = typeColor)
                     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
 
-                    AuditItemRow("ATTACHMENTS", attachmentsValue, valueColor = colors.accent)
+                    AuditItemRow("ATTACHMENTS", attachmentsValue)
                     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
 
                     AuditItemRow("PAYMENT MODE", paymentMode)

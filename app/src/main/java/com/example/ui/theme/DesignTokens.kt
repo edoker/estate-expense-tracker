@@ -35,9 +35,17 @@ data class AppColors(
     val accent: Color,
     val accentButtonFill: Color,
     val accentButtonText: Color,
-    val dangerRed: Color,
     val accentSoft: Color,
-    val redSoft: Color,
+    val gotGreen: Color,
+    val gotSoft: Color,
+    val gotButtonFill: Color,
+    val gotButtonText: Color,
+    val gaveRed: Color,
+    val gaveSoft: Color,
+    val gaveButtonFill: Color,
+    val gaveButtonText: Color,
+    val dangerRed: Color = gaveRed,
+    val redSoft: Color = gaveSoft,
     val modalOverlay: Color
 )
 
@@ -51,12 +59,18 @@ val DarkAppColors = AppColors(
     text = Color(0xFFD0DAD3),
     textMuted = Color(0xFF8FA198),
     textSecondary = Color(0xFFAEBBB3),
-    accent = Color(0xFF6FB59F),
-    accentButtonFill = Color(0xFF6FB59F),
+    accent = Color(0xFF7FA8D4),
+    accentButtonFill = Color(0xFF7FA8D4),
     accentButtonText = Color(0xFF0F1315),
-    dangerRed = Color(0xFFE08A93),
-    accentSoft = Color(0x266FB59F), // rgba(111,181,159,.15)
-    redSoft = Color(0x33E08A93), // rgba(224,138,147,.20)
+    accentSoft = Color(0x267FA8D4), // rgba(127,168,212,0.15)
+    gotGreen = Color(0xFF6FB59F),
+    gotSoft = Color(0x266FB59F), // rgba(111,181,159,0.15)
+    gotButtonFill = Color(0xFF6FB59F),
+    gotButtonText = Color(0xFF0F1315),
+    gaveRed = Color(0xFFE08A93),
+    gaveSoft = Color(0x33E08A93), // rgba(224,138,147,0.20)
+    gaveButtonFill = Color(0xFFE08A93),
+    gaveButtonText = Color(0xFF0F1315),
     modalOverlay = Color(0xAB000000) // rgba(0,0,0,.67)
 )
 
@@ -70,12 +84,18 @@ val LightAppColors = AppColors(
     text = Color(0xFF1C2621),
     textMuted = Color(0xFF5A6B61),
     textSecondary = Color(0xFF46574D),
-    accent = Color(0xFF176A5C), // deep teal
-    accentButtonFill = Color(0xFFA9D9CA),
+    accent = Color(0xFF2F5F8A),
+    accentButtonFill = Color(0xFFA9C6E4),
     accentButtonText = Color(0xFF14221E),
-    dangerRed = Color(0xFFB3303F),
-    accentSoft = Color(0x1A176A5C), // rgba(23,106,92,.10)
-    redSoft = Color(0x21B3303F), // rgba(179,48,63,.13)
+    accentSoft = Color(0x1A2F5F8A), // rgba(47,95,138,0.10)
+    gotGreen = Color(0xFF176A5C), // deep teal-green
+    gotSoft = Color(0x1A176A5C), // rgba(23,106,92,0.10)
+    gotButtonFill = Color(0xFFA9D9CA),
+    gotButtonText = Color(0xFF14221E),
+    gaveRed = Color(0xFFB3303F),
+    gaveSoft = Color(0x21B3303F), // rgba(179,48,63,0.13)
+    gaveButtonFill = Color(0xFFE9A3AB),
+    gaveButtonText = Color(0xFF14221E),
     modalOverlay = Color(0x661C2621) // rgba(28,38,33,.4)
 )
 

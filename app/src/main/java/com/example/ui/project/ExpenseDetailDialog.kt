@@ -181,9 +181,9 @@ fun ExpenseDetailDialog(
                 // label "AMOUNT PAID · YOU GAVE" or "AMOUNT RECEIVED · YOU GOT",
                 // 36px signed amount, supplier name, phone
                 // -------------------------------------------------------------
-                val heroBg = if (isIncome) colors.accentSoft else colors.redSoft
-                val heroBorder = if (isIncome) colors.accent else colors.dangerRed
-                val heroAmountColor = if (isIncome) colors.accent else colors.dangerRed
+                val heroBg = if (isIncome) colors.gotSoft else colors.gaveSoft
+                val heroBorder = if (isIncome) colors.gotGreen else colors.gaveRed
+                val heroAmountColor = if (isIncome) colors.gotGreen else colors.gaveRed
 
                 Box(
                     modifier = Modifier
@@ -350,7 +350,7 @@ fun ExpenseDetailDialog(
                                         Icon(
                                             imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.Image,
                                             contentDescription = null,
-                                            tint = if (isPdf) colors.dangerRed else colors.accent,
+                                            tint = colors.accent,
                                             modifier = Modifier.size(22.dp)
                                         )
                                     }

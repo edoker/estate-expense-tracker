@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -471,7 +472,12 @@ fun HomeScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (isAdmin) colors.accentSoft else colors.border)
+                                            .background(if (isAdmin) colors.accentSoft else Color.Transparent)
+                                            .border(
+                                                width = dimens.standardBorder,
+                                                color = if (isAdmin) colors.accent else colors.border,
+                                                shape = RoundedCornerShape(6.dp)
+                                            )
                                             .padding(horizontal = 7.dp, vertical = 2.dp)
                                     ) {
                                         Text(

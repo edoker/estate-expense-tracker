@@ -54,6 +54,7 @@ import com.example.data.util.formatDate
 import com.example.data.util.formatIndianCurrency
 import com.example.ui.components.PartnerCard
 import com.example.ui.components.PartnerChip
+import com.example.ui.components.PartnerChipVariant
 import com.example.ui.components.PartnerDateDivider
 import com.example.ui.components.PartnerIcon
 import com.example.ui.components.PartnerIconType
@@ -197,8 +198,16 @@ fun ExpensesTab(
                         )
 
                         // Net Balance large (30px/700)
-                        val netSign = if (netBalance >= 0) "+ " else "− "
-                        val netColor = if (netBalance >= 0) colors.accent else colors.dangerRed
+                        val netSign = when {
+                            netBalance > 0 -> "+ "
+                            netBalance < 0 -> "− "
+                            else -> ""
+                        }
+                        val netColor = when {
+                            netBalance > 0 -> colors.gotGreen
+                            netBalance < 0 -> colors.gaveRed
+                            else -> colors.text
+                        }
                         Text(
                             text = "$netSign${formatIndianCurrency(kotlin.math.abs(netBalance))}",
                             style = typography.netBalance,
@@ -223,7 +232,7 @@ fun ExpensesTab(
                                 Text(
                                     text = formatIndianCurrency(totalGot),
                                     style = typography.cardName,
-                                    color = colors.text
+                                    color = colors.gotGreen
                                 )
                             }
 
@@ -236,7 +245,7 @@ fun ExpensesTab(
                                 Text(
                                     text = formatIndianCurrency(totalGave),
                                     style = typography.cardName,
-                                    color = colors.text
+                                    color = colors.gaveRed
                                 )
                             }
 
@@ -310,7 +319,9 @@ fun ExpensesTab(
             // -----------------------------------------------------------------
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -322,6 +333,7 @@ fun ExpensesTab(
                         label = "All $countAll",
                         selected = activeFilter == LedgerFilter.ALL,
                         onClick = { activeFilter = LedgerFilter.ALL },
+                        variant = PartnerChipVariant.DEFAULT,
                         testTag = "filter_chip_all"
                     )
 
@@ -329,6 +341,7 @@ fun ExpensesTab(
                         label = "Gave $countGave",
                         selected = activeFilter == LedgerFilter.GAVE,
                         onClick = { activeFilter = LedgerFilter.GAVE },
+                        variant = PartnerChipVariant.GAVE,
                         testTag = "filter_chip_gave"
                     )
 
@@ -336,6 +349,7 @@ fun ExpensesTab(
                         label = "Got $countGot",
                         selected = activeFilter == LedgerFilter.GOT,
                         onClick = { activeFilter = LedgerFilter.GOT },
+                        variant = PartnerChipVariant.GOT,
                         testTag = "filter_chip_got"
                     )
 
@@ -352,6 +366,7 @@ fun ExpensesTab(
                             label = memberLabel,
                             selected = selectedMemberUid != null,
                             onClick = { memberFilterMenuExpanded = true },
+                            variant = PartnerChipVariant.DEFAULT,
                             testTag = "filter_chip_member"
                         )
 
@@ -433,9 +448,9 @@ fun ExpensesTab(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // 48px rounded square with tinted fill and bold direction arrow
-                                val iconBoxBg = if (isIncome) colors.accentSoft else colors.redSoft
-                                val iconBoxBorder = if (isIncome) colors.accent else colors.dangerRed
-                                val iconTint = if (isIncome) colors.accent else colors.dangerRed
+                                val iconBoxBg = if (isIncome) colors.gotSoft else colors.gaveSoft
+                                val iconBoxBorder = if (isIncome) colors.gotGreen else colors.gaveRed
+                                val iconTint = if (isIncome) colors.gotGreen else colors.gaveRed
 
                                 Box(
                                     modifier = Modifier
@@ -468,9 +483,9 @@ fun ExpensesTab(
                                             modifier = Modifier.weight(1f)
                                         )
 
-                                        // Signed amount: "− ₹1,25,000" in red, "+ ₹10,004" in teal
+                                        // Signed amount: "− ₹1,25,000" in gaveRed, "+ ₹10,004" in gotGreen
                                         val prefix = if (isIncome) "+ " else "− "
-                                        val amountColor = if (isIncome) colors.accent else colors.dangerRed
+                                        val amountColor = if (isIncome) colors.gotGreen else colors.gaveRed
                                         Text(
                                             text = "$prefix${formatIndianCurrency(expense.amount)}",
                                             style = typography.amountList,
