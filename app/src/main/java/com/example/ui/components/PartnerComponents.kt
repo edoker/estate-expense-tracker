@@ -53,7 +53,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -677,3 +679,90 @@ fun DangerousHoldButton(
         )
     }
 }
+
+/**
+ * Search Bar: 46dp tall, 12dp radius, search icon, clear button, Tomorrow body font
+ */
+@Composable
+fun PartnerSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String = "Search amount, paid to, note...",
+    modifier: Modifier = Modifier,
+    onClear: () -> Unit = { onQueryChange("") },
+    testTag: String = "partner_search_bar"
+) {
+    val colors = PartnerTheme.colors
+    val typography = PartnerTheme.typography
+    val dimens = PartnerTheme.dimens
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(dimens.buttonRadius))
+            .background(colors.surface)
+            .border(
+                width = dimens.standardBorder,
+                color = if (query.isNotBlank()) colors.accent else colors.border,
+                shape = RoundedCornerShape(dimens.buttonRadius)
+            )
+            .padding(horizontal = 14.dp, vertical = 11.dp)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PartnerIcon(
+                type = PartnerIconType.SEARCH,
+                tint = if (query.isNotBlank()) colors.accent else colors.textMuted,
+                size = 18.dp
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Box(modifier = Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = typography.body,
+                        color = colors.textMuted.copy(alpha = 0.65f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = typography.bodyBold.copy(color = colors.text),
+                    cursorBrush = SolidColor(colors.accent),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("search_text_input")
+                )
+            }
+
+            if (query.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.background)
+                        .clickable(onClick = onClear)
+                        .testTag("clear_search_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PartnerIcon(
+                        type = PartnerIconType.CLOSE,
+                        tint = colors.textMuted,
+                        size = 12.dp
+                    )
+                }
+            }
+        }
+    }
+}
+

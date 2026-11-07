@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,12 +53,15 @@ import com.example.data.model.ExpenseAttachment
 import com.example.data.model.ProjectMember
 import com.example.data.util.formatDate
 import com.example.data.util.formatIndianCurrency
+import com.example.data.util.matchesExpenseSearch
 import com.example.ui.components.PartnerCard
 import com.example.ui.components.PartnerChip
 import com.example.ui.components.PartnerChipVariant
 import com.example.ui.components.PartnerDateDivider
 import com.example.ui.components.PartnerIcon
 import com.example.ui.components.PartnerIconType
+import com.example.ui.components.PartnerOutlinedButton
+import com.example.ui.components.PartnerSearchBar
 import com.example.ui.theme.PartnerTheme
 import com.google.firebase.Timestamp
 
@@ -115,6 +119,8 @@ fun ExpensesTab(
     var memberFilterMenuExpanded by remember { mutableStateOf(false) }
     var partnerBreakdownExpanded by remember { mutableStateOf(false) }
 
+    var searchQuery by remember { mutableStateOf("") }
+
     val totalGave = remember(expenses) {
         expenses.filter { !it.isIncome }.sumOf { it.amount }
     }
@@ -123,7 +129,7 @@ fun ExpensesTab(
     }
     val netBalance = totalGot - totalGave
 
-    val filteredExpenses = remember(expenses, activeFilter, selectedMemberUid) {
+    val filteredExpenses = remember(expenses, activeFilter, selectedMemberUid, searchQuery) {
         expenses.filter { txn ->
             val matchesType = when (activeFilter) {
                 LedgerFilter.ALL -> true
@@ -131,7 +137,8 @@ fun ExpensesTab(
                 LedgerFilter.GOT -> txn.isIncome
             }
             val matchesMember = selectedMemberUid == null || txn.paidByUid == selectedMemberUid
-            matchesType && matchesMember
+            val matchesSearch = matchesExpenseSearch(txn, searchQuery, members)
+            matchesType && matchesMember && matchesSearch
         }
     }
 
@@ -315,6 +322,55 @@ fun ExpensesTab(
             }
 
             // -----------------------------------------------------------------
+            // Search Bar: Search across amount paid/received, paid to, and note
+            // -----------------------------------------------------------------
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    PartnerSearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        placeholder = "Search amount, paid to, note...",
+                        modifier = Modifier.testTag("expenses_search_bar"),
+                        onClear = { searchQuery = "" }
+                    )
+
+                    if (searchQuery.isNotBlank()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${filteredExpenses.size} result${if (filteredExpenses.size == 1) "" else "s"} for \"$searchQuery\"",
+                                style = typography.notes.copy(fontWeight = FontWeight.Medium),
+                                color = colors.accent,
+                                modifier = Modifier.testTag("search_results_count")
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { searchQuery = "" }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .testTag("clear_search_text_button")
+                            ) {
+                                Text(
+                                    text = "CLEAR SEARCH",
+                                    style = typography.smallLabel.copy(fontSize = 11.sp),
+                                    color = colors.accent
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // -----------------------------------------------------------------
             // Filter Chips: All, Gave, Got, Member dropdown with counts
             // -----------------------------------------------------------------
             item {
@@ -325,9 +381,26 @@ fun ExpensesTab(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val countAll = if (selectedMemberUid == null) expenses.size else expenses.count { it.paidByUid == selectedMemberUid }
-                    val countGave = if (selectedMemberUid == null) expenses.count { !it.isIncome } else expenses.count { !it.isIncome && it.paidByUid == selectedMemberUid }
-                    val countGot = if (selectedMemberUid == null) expenses.count { it.isIncome } else expenses.count { it.isIncome && it.paidByUid == selectedMemberUid }
+                    val countAll = remember(expenses, selectedMemberUid, searchQuery) {
+                        expenses.count { txn ->
+                            (selectedMemberUid == null || txn.paidByUid == selectedMemberUid) &&
+                            matchesExpenseSearch(txn, searchQuery, members)
+                        }
+                    }
+                    val countGave = remember(expenses, selectedMemberUid, searchQuery) {
+                        expenses.count { txn ->
+                            !txn.isIncome &&
+                            (selectedMemberUid == null || txn.paidByUid == selectedMemberUid) &&
+                            matchesExpenseSearch(txn, searchQuery, members)
+                        }
+                    }
+                    val countGot = remember(expenses, selectedMemberUid, searchQuery) {
+                        expenses.count { txn ->
+                            txn.isIncome &&
+                            (selectedMemberUid == null || txn.paidByUid == selectedMemberUid) &&
+                            matchesExpenseSearch(txn, searchQuery, members)
+                        }
+                    }
 
                     PartnerChip(
                         label = "All $countAll",
@@ -376,7 +449,7 @@ fun ExpensesTab(
                             modifier = Modifier.background(colors.surface)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Member: All (${expenses.size})", style = typography.body, color = colors.text) },
+                                text = { Text("Member: All ($countAll)", style = typography.body, color = colors.text) },
                                 onClick = {
                                     selectedMemberUid = null
                                     memberFilterMenuExpanded = false
@@ -385,7 +458,9 @@ fun ExpensesTab(
 
                             members.forEach { (uid, member) ->
                                 val name = member.name.ifBlank { member.email }
-                                val count = expenses.count { it.paidByUid == uid }
+                                val count = expenses.count { txn ->
+                                    txn.paidByUid == uid && matchesExpenseSearch(txn, searchQuery, members)
+                                }
                                 DropdownMenuItem(
                                     text = { Text("$name ($count)", style = typography.body, color = colors.text) },
                                     onClick = {
@@ -404,24 +479,58 @@ fun ExpensesTab(
             // -----------------------------------------------------------------
             if (filteredExpenses.isEmpty()) {
                 item {
-                    PartnerCard {
+                    PartnerCard(
+                        modifier = Modifier.testTag("empty_expenses_card")
+                    ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(36.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(dimens.iconSquareRadius))
+                                    .background(colors.accentSoft),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PartnerIcon(
+                                    type = if (searchQuery.isNotBlank()) PartnerIconType.SEARCH else PartnerIconType.TAB_EXPENSES,
+                                    tint = colors.accent,
+                                    size = 24.dp
+                                )
+                            }
+
                             Text(
-                                text = "No transactions found",
+                                text = if (searchQuery.isNotBlank()) "No matching entries" else "No transactions found",
                                 style = typography.cardName,
-                                color = colors.text
+                                color = colors.text,
+                                modifier = Modifier.testTag("empty_expenses_title")
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+
                             Text(
-                                text = "Tap the + button to record payments or receipts.",
+                                text = if (searchQuery.isNotBlank()) {
+                                    "No entries matched \"$searchQuery\" in amount, paid to, or notes."
+                                } else {
+                                    "Tap the + button to record payments or receipts."
+                                },
                                 style = typography.body,
-                                color = colors.textMuted
+                                color = colors.textMuted,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.testTag("empty_expenses_subtitle")
                             )
+
+                            if (searchQuery.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                PartnerOutlinedButton(
+                                    text = "Clear search",
+                                    onClick = { searchQuery = "" },
+                                    height = 42.dp,
+                                    testTag = "clear_search_button_empty_state"
+                                )
+                            }
                         }
                     }
                 }

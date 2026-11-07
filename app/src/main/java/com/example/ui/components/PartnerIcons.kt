@@ -37,7 +37,8 @@ enum class PartnerIconType {
     CHEVRON_RIGHT,
     CHECK,
     PLUS,
-    PAPERCLIP
+    PAPERCLIP,
+    SEARCH
 }
 
 @Composable
@@ -50,7 +51,7 @@ fun PartnerIcon(
         PartnerIconType.ARROW_OUT, PartnerIconType.ARROW_IN -> 3.3f
         PartnerIconType.BACK, PartnerIconType.MORE_VERT, PartnerIconType.CLOSE -> 3.0f
         PartnerIconType.CHEVRON_RIGHT, PartnerIconType.CHECK, PartnerIconType.AUDIT_CREATED,
-        PartnerIconType.AUDIT_EDITED, PartnerIconType.AUDIT_DELETED -> 2.6f
+        PartnerIconType.AUDIT_EDITED, PartnerIconType.AUDIT_DELETED, PartnerIconType.SEARCH -> 2.6f
         PartnerIconType.TAB_EXPENSES, PartnerIconType.TAB_AUDIT, PartnerIconType.TAB_MEMBERS,
         PartnerIconType.MODE_UPI, PartnerIconType.MODE_CASH, PartnerIconType.MODE_CHEQUE,
         PartnerIconType.MODE_NETBANKING, PartnerIconType.EXPORT_TRAY, PartnerIconType.PLUS,
@@ -88,6 +89,7 @@ fun PartnerIcon(
             PartnerIconType.CHECK -> drawCheck(tint, stroke, scale)
             PartnerIconType.PLUS -> drawPlus(tint, stroke, scale)
             PartnerIconType.PAPERCLIP -> drawPaperclip(tint, stroke, scale)
+            PartnerIconType.SEARCH -> drawSearch(tint, stroke, scale)
         }
     }
 }
@@ -512,3 +514,16 @@ private fun DrawScope.drawPaperclip(tint: Color, stroke: Stroke, s: Float) {
     }
     drawPath(path, tint, style = stroke)
 }
+
+// Search icon (magnifying glass)
+private fun DrawScope.drawSearch(tint: Color, stroke: Stroke, s: Float) {
+    val centerOffset = Offset(10.5f * s, 10.5f * s)
+    val radius = 6.0f * s
+    drawCircle(color = tint, radius = radius, center = centerOffset, style = stroke)
+    val path = Path().apply {
+        moveTo(15.0f * s, 15.0f * s)
+        lineTo(20.5f * s, 20.5f * s)
+    }
+    drawPath(path, tint, style = stroke)
+}
+
