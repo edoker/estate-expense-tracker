@@ -38,7 +38,7 @@ object ExcelReportGenerator {
 
         val cleanProject = projectName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val outputFile = File(reportsDir, "PartnerLedger_${cleanProject}_$timestamp.xlsx")
+        val outputFile = File(reportsDir, "SpendSync_${cleanProject}_$timestamp.xlsx")
 
         val totalGave = transactions.filter { !it.isIncome }.sumOf { it.amount }
         val totalGot = transactions.filter { it.isIncome }.sumOf { it.amount }

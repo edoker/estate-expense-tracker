@@ -70,7 +70,7 @@ object PdfReportGenerator {
                 textPaint.color = Color.WHITE
                 textPaint.textSize = 18f
                 textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                canvas.drawText("PARTNER LEDGER REPORT", MARGIN + 16f, y + 28f, textPaint)
+                canvas.drawText("SPENDSYNC REPORT", MARGIN + 16f, y + 28f, textPaint)
 
                 textPaint.textSize = 10.5f
                 textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
@@ -320,7 +320,7 @@ object PdfReportGenerator {
             textPaint.textSize = 8.5f
             textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             textPaint.color = Color.rgb(107, 114, 128)
-            canvas.drawText("Generated on $generatedTimestamp  •  PartnerLedger", MARGIN, footerY, textPaint)
+            canvas.drawText("Generated on $generatedTimestamp  •  SpendSync", MARGIN, footerY, textPaint)
 
             textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText("Page $pageNumber of $totalPages", PAGE_WIDTH - MARGIN, footerY, textPaint)
@@ -336,7 +336,7 @@ object PdfReportGenerator {
 
         val cleanProject = projectName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val outputFile = File(reportsDir, "PartnerLedger_${cleanProject}_$timestamp.pdf")
+        val outputFile = File(reportsDir, "SpendSync_${cleanProject}_$timestamp.pdf")
 
         FileOutputStream(outputFile).use { out ->
             pdfDocument.writeTo(out)

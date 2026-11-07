@@ -79,7 +79,7 @@ fun SignInScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.AccountBalanceWallet,
-                        contentDescription = "PartnerLedger Logo",
+                        contentDescription = "SpendSync Logo",
                         modifier = Modifier.size(54.dp),
                         tint = colors.accent
                     )
@@ -89,7 +89,7 @@ fun SignInScreen(
 
                 // App Name in Tomorrow bold
                 Text(
-                    text = "PartnerLedger",
+                    text = "SpendSync",
                     style = typography.netBalance.copy(
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,

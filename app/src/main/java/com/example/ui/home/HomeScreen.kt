@@ -102,7 +102,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "PartnerLedger",
+                        text = "SpendSync",
                         style = typography.screenTitle,
                         color = colors.text
                     )

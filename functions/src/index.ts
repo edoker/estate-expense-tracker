@@ -96,7 +96,7 @@ async function handleExpenseChange(event: any) {
   const projectRef = db.collection("projects").doc(projectId);
   const projectDoc = await projectRef.get();
   const projectData = projectDoc.exists ? projectDoc.data() : null;
-  const projectName = projectData?.name || "PartnerLedger";
+  const projectName = projectData?.name || "SpendSync";
   const membersMap = (projectData?.members || {}) as Record<
     string,
     { name?: string; email?: string; role?: string }

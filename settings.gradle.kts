@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "PartnerLedger"
+rootProject.name = "SpendSync"
 
 include(":app")

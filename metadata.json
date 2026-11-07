@@ -1,5 +1,5 @@
 {
-  "name": "PartnerLedger",
+  "name": "SpendSync",
   "description": "Business partner expense and supplier payment ledger for shared infrastructure projects.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
