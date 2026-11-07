@@ -1,7 +1,5 @@
 package com.example.ui.components
 
-import android.graphics.BlurMaskFilter
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -42,14 +40,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -237,12 +230,13 @@ fun PartnerCard(
 
 enum class PartnerChipVariant {
     DEFAULT, // Neutral blue accent when selected (e.g. All, Member)
-    GAVE,    // Red border, text, red-soft fill + soft red glow when selected
-    GOT      // Green border, text, green-soft fill + soft green glow when selected
+    GAVE,    // Red border, text, and red-soft fill when selected
+    GOT      // Green border, text, and green-soft fill when selected
 }
 
 /**
  * 44dp tall filter chip: radius 10dp, 1.5dp border, 13sp/600 font
+ * Styling is consistent across All, Gave, and Got variants.
  */
 @Composable
 fun PartnerChip(
@@ -259,7 +253,7 @@ fun PartnerChip(
     val typography = PartnerTheme.typography
     val dimens = PartnerTheme.dimens
 
-    // Unselected chips (All, Gave, Got): neutral border and neutral text, NO color and NO glow
+    // Background color: soft variant tint when selected, surface when unselected
     val bg = if (selected) {
         when (variant) {
             PartnerChipVariant.DEFAULT -> colors.accentSoft
@@ -270,6 +264,7 @@ fun PartnerChip(
         colors.surface
     }
 
+    // Border color: variant color when selected, neutral border when unselected
     val borderCol = if (selected) {
         when (variant) {
             PartnerChipVariant.DEFAULT -> colors.accent
@@ -280,6 +275,7 @@ fun PartnerChip(
         colors.border
     }
 
+    // Text color: variant color when selected, primary text when unselected
     val textCol = if (selected) {
         when (variant) {
             PartnerChipVariant.DEFAULT -> colors.accent
@@ -290,44 +286,9 @@ fun PartnerChip(
         colors.text
     }
 
-    // Glow appears ONLY on selected Gave/Got chip, animated over 150ms
-    val targetGlowColor = if (selected && (variant == PartnerChipVariant.GAVE || variant == PartnerChipVariant.GOT)) {
-        val baseColor = if (variant == PartnerChipVariant.GAVE) colors.gaveRed else colors.gotGreen
-        val opacity = if (colors.isDark) 0.45f else 0.30f
-        baseColor.copy(alpha = opacity)
-    } else {
-        Color.Transparent
-    }
-
-    val animatedGlowColor by animateColorAsState(
-        targetValue = targetGlowColor,
-        animationSpec = tween(durationMillis = 150),
-        label = "chip_glow"
-    )
-
-    val blurRadius = if (colors.isDark) 14.dp else 10.dp
-    val blurRadiusPx = with(LocalDensity.current) { blurRadius.toPx() }
-    val shapeRadiusPx = with(LocalDensity.current) { dimens.chipRadius.toPx() }
-
     Box(
         modifier = modifier
             .height(dimens.chipHeight)
-            .drawBehind {
-                if (animatedGlowColor.alpha > 0.01f) {
-                    drawIntoCanvas { canvas ->
-                        val paint = android.graphics.Paint().apply {
-                            isAntiAlias = true
-                            color = animatedGlowColor.toArgb()
-                            maskFilter = BlurMaskFilter(blurRadiusPx, BlurMaskFilter.Blur.NORMAL)
-                        }
-                        canvas.nativeCanvas.drawRoundRect(
-                            0f, 0f, size.width, size.height,
-                            shapeRadiusPx, shapeRadiusPx,
-                            paint
-                        )
-                    }
-                }
-            }
             .clip(RoundedCornerShape(dimens.chipRadius))
             .background(bg)
             .border(dimens.standardBorder, borderCol, RoundedCornerShape(dimens.chipRadius))
