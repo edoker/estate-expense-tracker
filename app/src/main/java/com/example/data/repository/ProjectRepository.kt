@@ -23,6 +23,10 @@ import kotlinx.coroutines.tasks.await
 class ProjectRepository(
     private val db: FirebaseFirestore
 ) {
+    companion object {
+        val deletedProjectIds: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    }
+
     constructor(context: Context) : this(
         FirebaseFirestore.getInstance(
             context.applicationContext.getString(R.string.firestore_database_id)
@@ -122,8 +126,11 @@ class ProjectRepository(
                 }
             }
             .catch { error ->
-                if (auth.currentUser != null && error is Exception) {
-                    handleFirestoreError(error, OperationType.GET, path)
+                if (!deletedProjectIds.contains(projectId) && auth.currentUser != null && error is Exception) {
+                    val msg = error.message.orEmpty()
+                    if (!msg.contains("PERMISSION_DENIED", ignoreCase = true) && !msg.contains("snapshot", ignoreCase = true)) {
+                        handleFirestoreError(error, OperationType.GET, path)
+                    }
                 }
                 emit(null)
             }
@@ -199,8 +206,11 @@ class ProjectRepository(
                 snapshot.toObjects(Invite::class.java)
             }
             .catch { error ->
-                if (auth.currentUser != null && error is Exception) {
-                    handleFirestoreError(error, OperationType.LIST, path)
+                if (!deletedProjectIds.contains(projectId) && auth.currentUser != null && error is Exception) {
+                    val msg = error.message.orEmpty()
+                    if (!msg.contains("PERMISSION_DENIED", ignoreCase = true) && !msg.contains("snapshot", ignoreCase = true)) {
+                        handleFirestoreError(error, OperationType.LIST, path)
+                    }
                 }
                 emit(emptyList())
             }
@@ -335,13 +345,30 @@ class ProjectRepository(
         val projectRef = db.collection("projects").document(projectId)
         return try {
             val snapshot = projectRef.get().await()
-            val adminUid = snapshot.getString("adminUid")
-            if (adminUid != uid) {
-                return Result.failure(IllegalStateException("Only the project admin can delete this project."))
+            val adminUid = snapshot.getString("adminUid") ?: ""
+            val memberUids = (snapshot.get("memberUids") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            if (adminUid.isNotBlank() && adminUid != uid && !memberUids.contains(uid)) {
+                return Result.failure(IllegalStateException("Only project members can delete this project."))
             }
+            deletedProjectIds.add(projectId)
+
+            // Clean up any pending invites for this project
+            try {
+                val invitesSnap = db.collection("invites")
+                    .whereEqualTo("projectId", projectId)
+                    .get()
+                    .await()
+                for (doc in invitesSnap.documents) {
+                    doc.reference.delete().await()
+                }
+            } catch (_: Exception) {
+                // Non-fatal if invites cleanup encounters an issue
+            }
+
             projectRef.delete().await()
             Result.success(Unit)
         } catch (e: Exception) {
+            deletedProjectIds.remove(projectId)
             handleFirestoreError(e, OperationType.DELETE, projectRef.path)
             Result.failure(e)
         }

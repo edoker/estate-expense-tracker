@@ -270,6 +270,7 @@ class ProjectDetailViewModel(
     }
 
     fun deleteProject(onSuccess: () -> Unit) {
+        ProjectRepository.deletedProjectIds.add(projectId)
         _isProcessing.value = true
         viewModelScope.launch {
             val result = projectRepository.deleteProject(projectId)
@@ -278,6 +279,7 @@ class ProjectDetailViewModel(
                 _operationMessage.value = "Project deleted successfully"
                 onSuccess()
             }.onFailure { error ->
+                ProjectRepository.deletedProjectIds.remove(projectId)
                 _operationMessage.value = error.localizedMessage ?: "Failed to delete project"
             }
         }

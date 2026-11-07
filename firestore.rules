@@ -25,8 +25,8 @@ service cloud.firestore {
 
     function isProjectMember(projectId) {
       return isAuthenticated() &&
-        exists(/databases/$(database)/documents/projects/$(projectId)) &&
-        (request.auth.uid in getProject(projectId).data.memberUids);
+        (!exists(/databases/$(database)/documents/projects/$(projectId)) ||
+         (request.auth.uid in getProject(projectId).data.memberUids));
     }
 
     function isValidProject(data) {
@@ -99,8 +99,8 @@ service cloud.firestore {
     function isInviteProjectMember(inviteData) {
       return isAuthenticated() &&
              'projectId' in inviteData &&
-             exists(/databases/$(database)/documents/projects/$(inviteData.projectId)) &&
-             (request.auth.uid in getProject(inviteData.projectId).data.memberUids);
+             (!exists(/databases/$(database)/documents/projects/$(inviteData.projectId)) ||
+              (request.auth.uid in getProject(inviteData.projectId).data.memberUids));
     }
 
     // -------------------------------------------------------------
@@ -115,8 +115,9 @@ service cloud.firestore {
     // PROJECTS COLLECTION & SUBCOLLECTIONS
     // -------------------------------------------------------------
     match /projects/{projectId} {
-      // Read: only if request.auth.uid is in resource.data.memberUids
-      allow read: if isAuthenticated() && (request.auth.uid in resource.data.memberUids);
+      // Read: allowed if document no longer exists or if requester is a member
+      allow read: if isAuthenticated() &&
+                    (resource == null || (request.auth.uid in resource.data.memberUids));
 
       // Create: any signed-in user, but adminUid must equal their uid, memberUids must equal exactly [their uid]
       allow create: if isAuthenticated() &&
@@ -129,8 +130,8 @@ service cloud.firestore {
       allow update: if (request.auth.uid in resource.data.memberUids && isMemberUpdatingProject()) ||
                       (!(request.auth.uid in resource.data.memberUids) && isInvitedUserJoining(projectId));
 
-      // Delete: allowed only for the project admin
-      allow delete: if isAuthenticated() && resource.data.adminUid == request.auth.uid;
+      // Delete: allowed for the project admin or project members
+      allow delete: if isAuthenticated() && (resource.data.adminUid == request.auth.uid || request.auth.uid in resource.data.memberUids);
 
       // -----------------------------------------------------------
       // EXPENSES SUBCOLLECTION

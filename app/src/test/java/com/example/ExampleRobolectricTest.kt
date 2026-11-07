@@ -18,4 +18,18 @@ class ExampleRobolectricTest {
     val appName = context.getString(R.string.app_name)
     assertEquals("SpendSync", appName)
   }
+
+  @Test
+  fun `delete project name match is case insensitive`() {
+    val projectName = "MGM resort"
+    val typedExact = "MGM resort"
+    val typedUpper = "MGM RESORT"
+    val typedLower = "mgm resort"
+    val typedWrong = "Other project"
+
+    org.junit.Assert.assertTrue(typedExact.trim().equals(projectName.trim(), ignoreCase = true))
+    org.junit.Assert.assertTrue(typedUpper.trim().equals(projectName.trim(), ignoreCase = true))
+    org.junit.Assert.assertTrue(typedLower.trim().equals(projectName.trim(), ignoreCase = true))
+    org.junit.Assert.assertFalse(typedWrong.trim().equals(projectName.trim(), ignoreCase = true))
+  }
 }

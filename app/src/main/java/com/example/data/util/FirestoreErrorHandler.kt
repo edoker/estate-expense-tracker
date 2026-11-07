@@ -52,6 +52,15 @@ fun handleFirestoreError(exception: Exception, operationType: OperationType, pat
     }
 
     val jsonString = errorInfoJson.toString()
-    Log.e("FirestoreError", "Firestore Error: $jsonString")
+    val isSnapshotListenerCancellation = (operationType == OperationType.GET || operationType == OperationType.LIST) &&
+        (exception.message?.contains("snapshot", ignoreCase = true) == true ||
+         exception.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true ||
+         exception.message?.contains("NOT_FOUND", ignoreCase = true) == true)
+
+    if (isSnapshotListenerCancellation) {
+        Log.w("FirestoreError", "Firestore Snapshot Closed: $jsonString")
+    } else {
+        Log.e("FirestoreError", "Firestore Error: $jsonString")
+    }
     return jsonString
 }

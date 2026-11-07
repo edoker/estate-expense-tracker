@@ -107,8 +107,11 @@ class ExpenseRepository(
                 )
             }
             .catch { error ->
-                if (auth.currentUser != null && error is Exception) {
-                    handleFirestoreError(error, OperationType.LIST, path)
+                if (!ProjectRepository.deletedProjectIds.contains(projectId) && auth.currentUser != null && error is Exception) {
+                    val msg = error.message.orEmpty()
+                    if (!msg.contains("PERMISSION_DENIED", ignoreCase = true) && !msg.contains("snapshot", ignoreCase = true)) {
+                        handleFirestoreError(error, OperationType.LIST, path)
+                    }
                 }
                 emit(emptyList())
             }

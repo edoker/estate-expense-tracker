@@ -257,29 +257,27 @@ fun ProjectDetailScreen(
                                 modifier = Modifier.testTag("menu_export_pdf")
                             )
 
-                            if (isAdmin) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "Delete Project",
-                                            style = typography.bodyBold,
-                                            color = colors.dangerRed
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        PartnerIcon(
-                                            type = PartnerIconType.AUDIT_DELETED,
-                                            tint = colors.dangerRed,
-                                            size = 18.dp
-                                        )
-                                    },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        showDeleteProjectSheet = true
-                                    },
-                                    modifier = Modifier.testTag("menu_delete_project")
-                                )
-                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Delete Project",
+                                        style = typography.bodyBold,
+                                        color = colors.dangerRed
+                                    )
+                                },
+                                leadingIcon = {
+                                    PartnerIcon(
+                                        type = PartnerIconType.AUDIT_DELETED,
+                                        tint = colors.dangerRed,
+                                        size = 18.dp
+                                    )
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showDeleteProjectSheet = true
+                                },
+                                modifier = Modifier.testTag("menu_delete_project")
+                            )
                         }
                     }
                 },
@@ -400,7 +398,7 @@ private fun DeleteProjectBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var typedName by remember { mutableStateOf("") }
-    val isMatch = typedName.trim().equals(projectName.trim(), ignoreCase = false)
+    val isMatch = typedName.trim().equals(projectName.trim(), ignoreCase = true)
 
     PartnerBottomSheet(
         onDismissRequest = onDismiss,
